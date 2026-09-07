@@ -1,11 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { MapPin, Navigation, Radio, Users, Zap } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { AppShell } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
-import { zones } from "@/lib/aura-store";
+import { useAura } from "@/lib/aura-store";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/zonas")({
@@ -28,8 +28,41 @@ export const Route = createFileRoute("/zonas")({
 });
 
 function ZonesPage() {
-  const [selected, setSelected] = useState(zones[0]!.id);
-  const zone = zones.find((z) => z.id === selected)!;
+  const { zones, checkInZone } = useAura();
+  const [selected, setSelected] = useState<string | null>(null);
+  const [checkingIn, setCheckingIn] = useState(false);
+  const zone = zones.find((z) => z.id === selected) ?? zones[0] ?? null;
+
+  useEffect(() => {
+    if (typeof navigator === "undefined" || !navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      () => {
+        // Coordinates aren't persisted yet (no location columns in the DB);
+        // this only warms up the permission for next session's proximity check.
+      },
+      () => {
+        // Permission denied or unavailable — nothing to block, check-in still works.
+      },
+    );
+  }, []);
+
+  async function handleCheckIn() {
+    if (!zone || checkingIn) return;
+    setCheckingIn(true);
+    const ok = await checkInZone(zone.id);
+    setCheckingIn(false);
+    if (ok) toast.success(`Check-in en ${zone.name} · ${zone.multiplier} activo`);
+  }
+
+  if (!zone) {
+    return (
+      <AppShell title="Zonas de Aura">
+        <div className="glass flex aspect-[4/5] items-center justify-center rounded-3xl">
+          <p className="text-sm text-muted-foreground">Cargando zonas…</p>
+        </div>
+      </AppShell>
+    );
+  }
 
   return (
     <AppShell title="Zonas de Aura">
@@ -52,7 +85,7 @@ function ZonesPage() {
         </svg>
 
         {zones.map((z) => {
-          const active = z.id === selected;
+          const active = z.id === zone.id;
           return (
             <button
               key={z.id}
@@ -99,7 +132,8 @@ function ZonesPage() {
             )}
           </div>
           <Button
-            onClick={() => toast.success(`Check-in en ${zone.name} · ${zone.multiplier} activo`)}
+            onClick={handleCheckIn}
+            disabled={checkingIn}
             className="mt-3 h-10 w-full rounded-xl bg-gradient-to-r from-primary to-accent text-xs font-bold"
           >
             <Navigation className="size-4" /> Hacer check-in
@@ -115,7 +149,7 @@ function ZonesPage() {
               onClick={() => setSelected(z.id)}
               className={cn(
                 "glass flex w-full items-center gap-3 rounded-2xl px-3.5 py-3 text-left transition-all active:scale-[0.99]",
-                z.id === selected && "border-primary/50",
+                z.id === zone.id && "border-primary/50",
               )}
             >
               <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary/15">

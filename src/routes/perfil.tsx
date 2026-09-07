@@ -1,7 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Check, Crown, Flame, Minus, Plus, Target, TrendingUp } from "lucide-react";
+import { Check, Crown, Flame, Minus, Pencil, Plus, Target, TrendingUp, X } from "lucide-react";
+import { useState } from "react";
 
 import { AppShell } from "@/components/AppShell";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { rankFor, ranks, useAura } from "@/lib/aura-store";
 import { cn } from "@/lib/utils";
@@ -26,9 +29,21 @@ export const Route = createFileRoute("/perfil")({
 });
 
 function ProfilePage() {
-  const { aura, streak, habits, toggleHabit, multiplier } = useAura();
+  const { aura, streak, habits, toggleHabit, multiplier, displayName, updateDisplayName } = useAura();
   const rank = rankFor(aura);
   const progress = Math.min(100, ((aura - rank.min) / (rank.max - rank.min)) * 100);
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState(displayName);
+
+  function startEditingName() {
+    setNameDraft(displayName || "Tú");
+    setEditingName(true);
+  }
+
+  function confirmNameEdit() {
+    updateDisplayName(nameDraft);
+    setEditingName(false);
+  }
 
   return (
     <AppShell title="Perfil">
@@ -38,8 +53,48 @@ function ProfilePage() {
           <div className="flex size-16 items-center justify-center rounded-3xl bg-gradient-to-br from-primary to-accent text-2xl font-black text-primary-foreground">
             T
           </div>
-          <div>
-            <p className="font-display text-lg font-bold">Tú</p>
+          <div className="min-w-0 flex-1">
+            {editingName ? (
+              <div className="flex items-center gap-1.5">
+                <Input
+                  autoFocus
+                  value={nameDraft}
+                  onChange={(e) => setNameDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") confirmNameEdit();
+                    if (e.key === "Escape") setEditingName(false);
+                  }}
+                  className="h-8 max-w-[160px] text-sm"
+                />
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="size-7"
+                  aria-label="Confirmar nombre"
+                  onClick={confirmNameEdit}
+                >
+                  <Check className="size-3.5" />
+                </Button>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="size-7"
+                  aria-label="Cancelar"
+                  onClick={() => setEditingName(false)}
+                >
+                  <X className="size-3.5" />
+                </Button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={startEditingName}
+                className="font-display flex items-center gap-1.5 text-lg font-bold"
+              >
+                {displayName || "Tú"}
+                <Pencil className="size-3.5 text-muted-foreground" />
+              </button>
+            )}
             <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
               <Crown className="size-3.5 text-[color:var(--gold)]" /> {rank.name}
             </p>
@@ -109,7 +164,73 @@ function ProfilePage() {
             <HabitRow key={h.id} habit={h} onToggle={() => toggleHabit(h.id)} />
           ))}
       </ul>
+
+      <NewHabitForm />
     </AppShell>
+  );
+}
+
+function NewHabitForm() {
+  const { addHabit } = useAura();
+  const [name, setName] = useState("");
+  const [points, setPoints] = useState("50");
+  const [kind, setKind] = useState<"habit" | "slip">("habit");
+
+  function submit(e: React.FormEvent) {
+    e.preventDefault();
+    const trimmed = name.trim();
+    const parsedPoints = Number(points);
+    if (!trimmed || !Number.isFinite(parsedPoints)) return;
+    addHabit({ name: trimmed, points: Math.abs(parsedPoints) * (kind === "slip" ? -1 : 1), kind });
+    setName("");
+    setPoints("50");
+  }
+
+  return (
+    <form onSubmit={submit} className="glass mt-6 space-y-3 rounded-2xl p-4">
+      <h2 className="font-display text-sm font-semibold">Nuevo hábito o desliz</h2>
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={() => setKind("habit")}
+          className={cn(
+            "flex-1 rounded-xl border px-3 py-1.5 text-xs font-semibold transition-colors",
+            kind === "habit"
+              ? "border-primary bg-primary/20 text-primary"
+              : "border-border text-muted-foreground",
+          )}
+        >
+          Hábito
+        </button>
+        <button
+          type="button"
+          onClick={() => setKind("slip")}
+          className={cn(
+            "flex-1 rounded-xl border px-3 py-1.5 text-xs font-semibold transition-colors",
+            kind === "slip"
+              ? "border-destructive bg-destructive/20 text-destructive"
+              : "border-border text-muted-foreground",
+          )}
+        >
+          Desliz
+        </button>
+      </div>
+      <Input
+        placeholder="Nombre"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+      />
+      <Input
+        type="number"
+        min={1}
+        placeholder="Puntos"
+        value={points}
+        onChange={(e) => setPoints(e.target.value)}
+      />
+      <Button type="submit" className="w-full" size="sm">
+        Añadir
+      </Button>
+    </form>
   );
 }
 

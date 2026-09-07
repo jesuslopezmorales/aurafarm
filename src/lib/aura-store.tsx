@@ -1,4 +1,8 @@
-import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { toast } from "sonner";
+
+import { supabase } from "@/integrations/supabase/client";
+import type { Tables } from "@/integrations/supabase/types";
 
 export type Vote = "real" | "cap" | null;
 
@@ -110,63 +114,23 @@ const initialHabits: Habit[] = [
   { id: "h6", name: "Cancelar planes por pereza", points: -70, done: false, kind: "slip" },
 ];
 
-export const zones: AuraZone[] = [
-  {
-    id: "z1",
-    name: "Parque del Retiro",
-    kind: "Evento",
-    x: 26,
-    y: 30,
-    multiplier: "x2 Aura",
-    people: 148,
-    detail: "Run club comunitario · 07:00",
-    live: true,
-  },
-  {
-    id: "z2",
-    name: "Iron Vault Gym",
-    kind: "Patrocinado",
-    x: 68,
-    y: 22,
-    multiplier: "x3 Aura",
-    people: 92,
-    detail: "Check-in patrocinado · todo el día",
-    live: true,
-  },
-  {
-    id: "z3",
-    name: "Biblioteca Central",
-    kind: "Zona salvaje",
-    x: 44,
-    y: 58,
-    multiplier: "x1.5 Aura",
-    people: 37,
-    detail: "Deep work silencioso · 2 h mínimo",
-    live: false,
-  },
-  {
-    id: "z4",
-    name: "Azotea Neón",
-    kind: "Evento",
-    x: 78,
-    y: 48,
-    multiplier: "x2.5 Aura",
-    people: 264,
-    detail: "Aura Battle abierta · 21:00",
-    live: true,
-  },
-  {
-    id: "z5",
-    name: "Mercado Sur",
-    kind: "Patrocinado",
-    x: 16,
-    y: 60,
-    multiplier: "x1.8 Aura",
-    people: 61,
-    detail: "Comida real, cero ultraprocesados",
-    live: false,
-  },
-];
+function zoneFromRow(row: Tables<"aura_zones">): AuraZone {
+  const kind: AuraZone["kind"] =
+    row.kind === "Evento" || row.kind === "Patrocinado" || row.kind === "Zona salvaje"
+      ? row.kind
+      : "Zona salvaje";
+  return {
+    id: row.id,
+    name: row.name,
+    kind,
+    x: row.x,
+    y: row.y,
+    multiplier: row.multiplier,
+    people: row.people,
+    detail: row.detail,
+    live: row.live,
+  };
+}
 
 export const ranks = [
   { name: "NPC", min: 0, max: 2500 },
@@ -178,17 +142,55 @@ export function rankFor(aura: number) {
   return ranks.find((r) => aura >= r.min && aura < r.max) ?? ranks[ranks.length - 1]!;
 }
 
+/** Local (not UTC) calendar date, matching the `date` type of habit_logs.logged_on. */
+function todayIso(): string {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+/** [00:00:00 today, 00:00:00 tomorrow) in local time, as ISO strings for a timestamptz range filter. */
+function localDayRangeIso(): { start: string; end: string } {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const end = new Date(start);
+  end.setDate(end.getDate() + 1);
+  return { start: start.toISOString(), end: end.toISOString() };
+}
+
+const GUEST_DISPLAY_NAME = "Tú";
+
+type ProfileRow = Tables<"profiles">;
+type HabitRow = Tables<"habits">;
+
+function habitFromRow(row: HabitRow, done: boolean): Habit {
+  return {
+    id: row.id,
+    name: row.name,
+    points: row.points,
+    kind: row.kind === "slip" ? "slip" : "habit",
+    done,
+  };
+}
+
 type Store = {
   aura: number;
   streak: number;
   multiplier: number;
+  displayName: string;
   posts: AuraPost[];
   habits: Habit[];
+  zones: AuraZone[];
   passActive: boolean;
   vote: (postId: string, vote: Exclude<Vote, null>) => void;
   toggleHabit: (habitId: string) => void;
   addPost: (input: { action: string; detail: string; points: number; category: string }) => void;
   activatePass: (multiplier: number) => void;
+  addHabit: (input: { name: string; points: number; kind: "habit" | "slip" }) => void;
+  updateDisplayName: (name: string) => void;
+  checkInZone: (zoneId: string) => Promise<boolean>;
 };
 
 const AuraContext = createContext<Store | null>(null);
@@ -198,17 +200,120 @@ export function AuraProvider({ children }: { children: ReactNode }) {
   const [streak, setStreak] = useState(37);
   const [multiplier, setMultiplier] = useState(1);
   const [passActive, setPassActive] = useState(false);
+  const [displayName, setDisplayName] = useState(GUEST_DISPLAY_NAME);
   const [posts, setPosts] = useState(initialPosts);
   const [habits, setHabits] = useState(initialHabits);
+  const [zones, setZones] = useState<AuraZone[]>([]);
+  const [userId, setUserId] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    supabase
+      .from("aura_zones")
+      .select("*")
+      .order("name")
+      .then(({ data, error }) => {
+        if (!active) return;
+        if (error) {
+          console.error("[aura-store] load zones", error.message);
+          return;
+        }
+        setZones((data ?? []).map(zoneFromRow));
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    let lastUid: string | null | undefined = undefined;
+
+    function applyProfile(profile: ProfileRow) {
+      if (!active) return;
+      setAura(profile.aura);
+      setStreak(profile.streak);
+      setMultiplier(profile.multiplier);
+      setPassActive(profile.pass_active);
+      setDisplayName(profile.display_name);
+    }
+
+    async function loadForUser(uid: string) {
+      const existing = await supabase.from("profiles").select("*").eq("id", uid).maybeSingle();
+      if (!active) return;
+      if (existing.error) {
+        console.error("[aura-store] load profile", existing.error.message);
+      } else if (existing.data) {
+        applyProfile(existing.data);
+      } else {
+        const created = await supabase.from("profiles").insert({ id: uid }).select("*").single();
+        if (!active) return;
+        if (created.error) {
+          console.error("[aura-store] create profile", created.error.message);
+        } else if (created.data) {
+          applyProfile(created.data);
+        }
+      }
+
+      const [habitsRes, logsRes] = await Promise.all([
+        supabase.from("habits").select("*").eq("user_id", uid),
+        supabase.from("habit_logs").select("habit_id").eq("user_id", uid).eq("logged_on", todayIso()),
+      ]);
+      if (!active) return;
+      if (habitsRes.error) {
+        console.error("[aura-store] load habits", habitsRes.error.message);
+        return;
+      }
+      const doneIds = new Set((logsRes.data ?? []).map((l) => l.habit_id));
+      setHabits(habitsRes.data.map((row) => habitFromRow(row, doneIds.has(row.id))));
+    }
+
+    function resetToGuestDefaults() {
+      if (!active) return;
+      setAura(8420);
+      setStreak(37);
+      setMultiplier(1);
+      setPassActive(false);
+      setDisplayName(GUEST_DISPLAY_NAME);
+      setHabits(initialHabits);
+    }
+
+    function syncUser(uid: string | null) {
+      if (uid === lastUid) return;
+      lastUid = uid;
+      setUserId(uid);
+      if (uid) {
+        void loadForUser(uid);
+      } else {
+        resetToGuestDefaults();
+      }
+    }
+
+    supabase.auth.getSession().then(({ data }) => {
+      if (!active) return;
+      syncUser(data.session?.user.id ?? null);
+    });
+
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      syncUser(session?.user.id ?? null);
+    });
+
+    return () => {
+      active = false;
+      sub.subscription.unsubscribe();
+    };
+  }, []);
 
   const value = useMemo<Store>(
     () => ({
       aura,
       streak,
       multiplier,
+      displayName,
       passActive,
       posts,
       habits,
+      zones,
       vote: (postId, vote) =>
         setPosts((prev) =>
           prev.map((p) => {
@@ -226,14 +331,38 @@ export function AuraProvider({ children }: { children: ReactNode }) {
           }),
         ),
       toggleHabit: (habitId) => {
-        setHabits((prev) =>
-          prev.map((h) => {
-            if (h.id !== habitId) return h;
-            const done = !h.done;
-            setAura((a) => Math.max(0, a + (done ? h.points : -h.points) * multiplier));
-            return { ...h, done };
-          }),
-        );
+        const target = habits.find((h) => h.id === habitId);
+        if (!target) return;
+        const done = !target.done;
+        const delta = (done ? target.points : -target.points) * multiplier;
+        const nextAura = Math.max(0, aura + delta);
+
+        setHabits((prev) => prev.map((h) => (h.id === habitId ? { ...h, done } : h)));
+        setAura(nextAura);
+
+        if (!userId) return;
+
+        const today = todayIso();
+        const logOp = done
+          ? supabase.from("habit_logs").insert({ habit_id: habitId, user_id: userId, logged_on: today })
+          : supabase
+              .from("habit_logs")
+              .delete()
+              .eq("habit_id", habitId)
+              .eq("user_id", userId)
+              .eq("logged_on", today);
+
+        logOp.then(({ error }) => {
+          if (error) console.error("[aura-store] habit_logs", error.message);
+        });
+
+        supabase
+          .from("profiles")
+          .update({ aura: nextAura })
+          .eq("id", userId)
+          .then(({ error }) => {
+            if (error) console.error("[aura-store] profiles.aura", error.message);
+          });
       },
       addPost: ({ action, detail, points, category }) => {
         const gain = Math.round(points * multiplier);
@@ -265,8 +394,80 @@ export function AuraProvider({ children }: { children: ReactNode }) {
         setMultiplier(m);
         setPassActive(true);
       },
+      addHabit: ({ name, points, kind }) => {
+        if (!userId) {
+          toast.error("Inicia sesión para añadir hábitos");
+          return;
+        }
+        const trimmed = name.trim();
+        if (!trimmed) return;
+        supabase
+          .from("habits")
+          .insert({ user_id: userId, name: trimmed, points, kind })
+          .select("*")
+          .single()
+          .then(({ data, error }) => {
+            if (error || !data) {
+              console.error("[aura-store] addHabit", error?.message);
+              toast.error("No se pudo guardar el hábito");
+              return;
+            }
+            setHabits((prev) => [...prev, habitFromRow(data, false)]);
+          });
+      },
+      updateDisplayName: (name) => {
+        if (!userId) {
+          toast.error("Inicia sesión para editar tu nombre");
+          return;
+        }
+        const trimmed = name.trim();
+        if (!trimmed) return;
+        setDisplayName(trimmed);
+        supabase
+          .from("profiles")
+          .update({ display_name: trimmed })
+          .eq("id", userId)
+          .then(({ error }) => {
+            if (error) {
+              console.error("[aura-store] updateDisplayName", error.message);
+              toast.error("No se pudo actualizar el nombre");
+            }
+          });
+      },
+      checkInZone: async (zoneId) => {
+        if (!userId) {
+          toast.error("Inicia sesión para hacer check-in");
+          return false;
+        }
+
+        const { start, end } = localDayRangeIso();
+        const lookup = await supabase
+          .from("zone_checkins")
+          .select("id")
+          .eq("user_id", userId)
+          .eq("zone_id", zoneId)
+          .gte("created_at", start)
+          .lt("created_at", end)
+          .limit(1);
+        if (lookup.error) {
+          console.error("[aura-store] checkInZone lookup", lookup.error.message);
+        } else if (lookup.data.length > 0) {
+          toast.info("Ya hiciste check-in aquí hoy");
+          return false;
+        }
+
+        const { error } = await supabase
+          .from("zone_checkins")
+          .insert({ zone_id: zoneId, user_id: userId });
+        if (error) {
+          console.error("[aura-store] checkInZone", error.message);
+          toast.error("No se pudo registrar el check-in");
+          return false;
+        }
+        return true;
+      },
     }),
-    [aura, streak, multiplier, passActive, posts, habits],
+    [aura, streak, multiplier, displayName, passActive, posts, habits, zones, userId],
   );
 
   return <AuraContext.Provider value={value}>{children}</AuraContext.Provider>;
