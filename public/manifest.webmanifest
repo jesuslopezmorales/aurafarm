@@ -1,6 +1,6 @@
 {
-  "name": "AuraSync — Farmea tu Aura",
-  "short_name": "AuraSync",
+  "name": "AuraFarm — Farmea tu Aura",
+  "short_name": "AuraFarm",
   "description": "Desarrollo personal gamificado: prueba tus acciones, sube de rango y farmea Aura.",
   "start_url": "/",
   "display": "standalone",

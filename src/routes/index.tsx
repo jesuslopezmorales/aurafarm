@@ -24,13 +24,13 @@ import { cn } from "@/lib/utils";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "AuraSync — Feed de Prueba de Aura" },
+      { title: "AuraFarm — Feed de Prueba de Aura" },
       {
         name: "description",
         content:
           "Publica pruebas de tus acciones, gana o pierde Aura y deja que la comunidad vote la autenticidad.",
       },
-      { property: "og:title", content: "AuraSync — Feed de Prueba de Aura" },
+      { property: "og:title", content: "AuraFarm — Feed de Prueba de Aura" },
       {
         property: "og:description",
         content: "Desarrollo personal gamificado: farmea Aura con pruebas reales cada día.",

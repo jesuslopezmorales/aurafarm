@@ -10,13 +10,13 @@ import { supabase } from "@/integrations/supabase/client";
 export const Route = createFileRoute("/conectar")({
   head: () => ({
     meta: [
-      { title: "Conectar AuraSync con tu asistente de IA" },
+      { title: "Conectar AuraFarm con tu asistente de IA" },
       {
         name: "description",
         content:
-          "Instrucciones para conectar AuraSync a ChatGPT, Claude, Cursor u otros clientes compatibles y consultar tu Aura, hábitos y zonas desde el chat.",
+          "Instrucciones para conectar AuraFarm a ChatGPT, Claude, Cursor u otros clientes compatibles y consultar tu Aura, hábitos y zonas desde el chat.",
       },
-      { property: "og:title", content: "Conectar AuraSync con tu asistente de IA" },
+      { property: "og:title", content: "Conectar AuraFarm con tu asistente de IA" },
       {
         property: "og:description",
         content: "Conecta tu cuenta y consulta tu Aura, feed, hábitos y zonas desde tu asistente.",
@@ -64,7 +64,7 @@ function ConnectPage() {
           Habla con tu Aura desde tu asistente
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          AuraSync ofrece un servidor de herramientas para clientes compatibles como ChatGPT, Claude,
+          AuraFarm ofrece un servidor de herramientas para clientes compatibles como ChatGPT, Claude,
           Cursor o Codex. Tras conectarlo puedes pedir cosas como «¿cómo va mi racha?» o «apunta que
           he entrenado 45 minutos».
         </p>
@@ -89,7 +89,7 @@ function ConnectPage() {
       <section className="glass mt-4 rounded-3xl p-5">
         <h2 className="font-display text-sm font-semibold">2 · Autoriza tu cuenta</h2>
         <p className="mt-2 text-sm text-muted-foreground">
-          Al conectar, tu cliente te llevará a una pantalla de AuraSync para iniciar sesión y aprobar
+          Al conectar, tu cliente te llevará a una pantalla de AuraFarm para iniciar sesión y aprobar
           el acceso. Cada persona ve y modifica solo su propio Aura.
         </p>
         <div className="mt-3 flex items-center gap-2 text-xs">

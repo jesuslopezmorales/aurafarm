@@ -27,7 +27,7 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
           </span>
           <div className="leading-tight">
             <p className="font-display text-sm font-semibold">{title}</p>
-            <p className="text-[11px] text-muted-foreground">AuraSync</p>
+            <p className="text-[11px] text-muted-foreground">AuraFarm</p>
           </div>
         </div>
         <div className="flex items-center gap-2">

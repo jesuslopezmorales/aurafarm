@@ -19,13 +19,13 @@ export const Route = createFileRoute("/auth")({
   validateSearch: (s: Record<string, unknown>) => ({ next: safeNext(s['next']) }),
   head: () => ({
     meta: [
-      { title: "Entrar en AuraSync — tu cuenta de Aura" },
+      { title: "Entrar en AuraFarm — tu cuenta de Aura" },
       {
         name: "description",
         content:
-          "Crea tu cuenta de AuraSync para guardar tu Aura, tu racha y tus hábitos, y conectar asistentes de IA a tu progreso.",
+          "Crea tu cuenta de AuraFarm para guardar tu Aura, tu racha y tus hábitos, y conectar asistentes de IA a tu progreso.",
       },
-      { property: "og:title", content: "Entrar en AuraSync" },
+      { property: "og:title", content: "Entrar en AuraFarm" },
       { property: "og:description", content: "Guarda tu progreso de Aura y conecta tus asistentes." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },

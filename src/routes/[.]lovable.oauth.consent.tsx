@@ -80,9 +80,9 @@ function Consent() {
         <span className="glow-electric flex size-11 items-center justify-center rounded-2xl bg-accent/15">
           <ShieldCheck className="size-5 text-accent" />
         </span>
-        <h1 className="font-display mt-4 text-xl font-bold">Conectar {clientName} a AuraSync</h1>
+        <h1 className="font-display mt-4 text-xl font-bold">Conectar {clientName} a AuraFarm</h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          {clientName} podrá usar las herramientas de AuraSync en tu nombre mientras tú tengas la
+          {clientName} podrá usar las herramientas de AuraFarm en tu nombre mientras tú tengas la
           sesión iniciada.
         </p>
         <ul className="mt-4 space-y-2 text-sm">
@@ -92,7 +92,7 @@ function Consent() {
           <li>· Consultar zonas y eventos</li>
         </ul>
         <p className="mt-4 text-xs text-muted-foreground">
-          Esto no salta los permisos de AuraSync: sigue viendo solo lo que tú puedes ver.
+          Esto no salta los permisos de AuraFarm: sigue viendo solo lo que tú puedes ver.
         </p>
         {error && (
           <p role="alert" className="mt-4 text-sm text-destructive">

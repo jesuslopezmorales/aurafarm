@@ -17,7 +17,7 @@ export const Route = createFileRoute("/zonas")({
         content:
           "Explora el mapa de Zonas de Aura: eventos locales, lugares patrocinados y multiplicadores activos cerca de ti.",
       },
-      { property: "og:title", content: "Mapa de Zonas de Aura — AuraSync" },
+      { property: "og:title", content: "Mapa de Zonas de Aura — AuraFarm" },
       {
         property: "og:description",
         content: "Haz check-in en eventos y lugares patrocinados para multiplicar tu Aura.",

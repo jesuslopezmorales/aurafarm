@@ -82,14 +82,14 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         name: "viewport",
         content: "width=device-width, initial-scale=1, viewport-fit=cover",
       },
-      { title: "AuraSync — Farmea tu Aura cada día" },
+      { title: "AuraFarm — Farmea tu Aura cada día" },
       {
         name: "description",
         content:
-          "AuraSync convierte tu desarrollo personal en un juego: pruebas de Aura, rangos, rachas, zonas locales y Aura Pass.",
+          "AuraFarm convierte tu desarrollo personal en un juego: pruebas de Aura, rangos, rachas, zonas locales y Aura Pass.",
       },
       { name: "theme-color", content: "#0f0e18" },
-      { property: "og:title", content: "AuraSync — Farmea tu Aura cada día" },
+      { property: "og:title", content: "AuraFarm — Farmea tu Aura cada día" },
       {
         property: "og:description",
         content: "Desarrollo personal gamificado con pruebas reales y comunidad.",
@@ -98,7 +98,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "twitter:card", content: "summary_large_image" },
       { name: "apple-mobile-web-app-capable", content: "yes" },
       { name: "apple-mobile-web-app-status-bar-style", content: "black-translucent" },
-      { name: "apple-mobile-web-app-title", content: "AuraSync" },
+      { name: "apple-mobile-web-app-title", content: "AuraFarm" },
     ],
     links: [
       { rel: "stylesheet", href: appCss },

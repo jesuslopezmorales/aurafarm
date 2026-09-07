@@ -15,7 +15,7 @@ export const Route = createFileRoute("/perfil")({
         content:
           "Consulta tu rango (NPC, Main Character, Aura Master), tu contador de Aura, tu racha y marca hábitos o deslices del día.",
       },
-      { property: "og:title", content: "Tu perfil de Aura en AuraSync" },
+      { property: "og:title", content: "Tu perfil de Aura en AuraFarm" },
       {
         property: "og:description",
         content: "Rango, contador de Aura, racha de días y control de hábitos y deslices.",

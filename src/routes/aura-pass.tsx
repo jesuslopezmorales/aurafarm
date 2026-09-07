@@ -17,7 +17,7 @@ export const Route = createFileRoute("/aura-pass")({
         content:
           "Suscríbete al Aura Pass para desbloquear multiplicadores, recompensas exclusivas y ventajas en las Zonas de Aura.",
       },
-      { property: "og:title", content: "Aura Pass — AuraSync" },
+      { property: "og:title", content: "Aura Pass — AuraFarm" },
       {
         property: "og:description",
         content: "Multiplicadores de Aura, recompensas de temporada y ventajas de comunidad.",

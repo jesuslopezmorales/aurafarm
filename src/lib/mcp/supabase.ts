@@ -114,6 +114,6 @@ export function rankFor(aura: number) {
 
 export function requireAuth(ctx: ToolContext) {
   if (!ctx.isAuthenticated() || !ctx.getUserId()) {
-    throw new Error("Necesitas conectar tu cuenta de AuraSync para usar esta herramienta");
+    throw new Error("Necesitas conectar tu cuenta de AuraFarm para usar esta herramienta");
   }
 }
