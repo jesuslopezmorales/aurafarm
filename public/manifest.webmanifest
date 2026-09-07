@@ -1,0 +1,14 @@
+{
+  "name": "AuraSync — Farmea tu Aura",
+  "short_name": "AuraSync",
+  "description": "Desarrollo personal gamificado: prueba tus acciones, sube de rango y farmea Aura.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#100f19",
+  "theme_color": "#0f0e18",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
