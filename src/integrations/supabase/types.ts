@@ -50,7 +50,9 @@ export type Database = {
           detail: string
           id: string
           kind: string
+          latitude: number | null
           live: boolean
+          longitude: number | null
           multiplier: string
           name: string
           people: number
@@ -62,7 +64,9 @@ export type Database = {
           detail?: string
           id?: string
           kind?: string
+          latitude?: number | null
           live?: boolean
+          longitude?: number | null
           multiplier?: string
           name: string
           people?: number
@@ -74,7 +78,9 @@ export type Database = {
           detail?: string
           id?: string
           kind?: string
+          latitude?: number | null
           live?: boolean
+          longitude?: number | null
           multiplier?: string
           name?: string
           people?: number
@@ -177,6 +183,8 @@ export type Database = {
       profiles: {
         Row: {
           aura: number
+          avatar_url: string | null
+          bio: string | null
           created_at: string
           display_name: string
           handle: string
@@ -188,6 +196,8 @@ export type Database = {
         }
         Insert: {
           aura?: number
+          avatar_url?: string | null
+          bio?: string | null
           created_at?: string
           display_name?: string
           handle?: string
@@ -199,6 +209,8 @@ export type Database = {
         }
         Update: {
           aura?: number
+          avatar_url?: string | null
+          bio?: string | null
           created_at?: string
           display_name?: string
           handle?: string
