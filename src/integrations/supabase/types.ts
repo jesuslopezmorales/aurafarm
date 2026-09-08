@@ -192,6 +192,7 @@ export type Database = {
           multiplier: number
           pass_active: boolean
           streak: number
+          stripe_customer_id: string | null
           updated_at: string
         }
         Insert: {
@@ -205,6 +206,7 @@ export type Database = {
           multiplier?: number
           pass_active?: boolean
           streak?: number
+          stripe_customer_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -218,6 +220,7 @@ export type Database = {
           multiplier?: number
           pass_active?: boolean
           streak?: number
+          stripe_customer_id?: string | null
           updated_at?: string
         }
         Relationships: []

@@ -1,10 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Check, Crown, Gift, Sparkles, Star, Zap } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { AppShell } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
+import { createCheckoutSession } from "@/lib/stripe-checkout.functions";
 import { useAura } from "@/lib/aura-store";
 import { cn } from "@/lib/utils";
 
@@ -75,6 +76,46 @@ const shop = [
 function PassPage() {
   const { aura, multiplier, activatePass } = useAura();
   const [selected, setSelected] = useState("plus");
+  const [subscribing, setSubscribing] = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const checkout = params.get("checkout");
+    if (checkout === "success") {
+      toast.success("Pago confirmado. Actualizando tu Aura Pass…");
+      window.history.replaceState({}, "", "/aura-pass");
+      window.location.reload();
+    } else if (checkout === "cancel") {
+      toast.info("Pago cancelado");
+      window.history.replaceState({}, "", "/aura-pass");
+    }
+  }, []);
+
+  async function handleActivate() {
+    const plan = plans.find((p) => p.id === selected)!;
+
+    if (plan.id !== "plus") {
+      // Sin cobro real configurado todavía para este plan (fuera de alcance de esta sesión).
+      activatePass(plan.multiplier);
+      toast.success(`${plan.name} activo · multiplicador x${plan.multiplier}`);
+      return;
+    }
+
+    setSubscribing(true);
+    try {
+      const { url } = await createCheckoutSession();
+      if (url) {
+        window.location.href = url;
+      } else {
+        toast.error("No se pudo iniciar el pago");
+        setSubscribing(false);
+      }
+    } catch (err) {
+      console.error("[aura-pass] createCheckoutSession", err);
+      toast.error("No se pudo iniciar el pago");
+      setSubscribing(false);
+    }
+  }
 
   return (
     <AppShell title="Aura Pass">
@@ -132,13 +173,12 @@ function PassPage() {
 
       <Button
         className="mt-4 h-12 w-full rounded-2xl bg-gradient-to-r from-primary to-accent text-sm font-bold"
-        onClick={() => {
-          const plan = plans.find((p) => p.id === selected)!;
-          activatePass(plan.multiplier);
-          toast.success(`${plan.name} activo · multiplicador x${plan.multiplier}`);
-        }}
+        onClick={handleActivate}
+        disabled={subscribing}
       >
-        Activar {plans.find((p) => p.id === selected)!.name}
+        {subscribing
+          ? "Redirigiendo a pago…"
+          : `Activar ${plans.find((p) => p.id === selected)!.name}`}
       </Button>
 
       <h2 className="font-display mt-7 mb-3 text-sm font-semibold">Tienda de recompensas</h2>
@@ -164,7 +204,8 @@ function PassPage() {
       </div>
 
       <p className="mt-6 text-center text-[10px] text-muted-foreground">
-        Cancela cuando quieras. Los precios mostrados son de ejemplo.
+        Cancela cuando quieras. Aura Pass se cobra mensualmente vía Stripe; los precios de Aura
+        Master y la tienda de recompensas son de ejemplo, sin cobro activo todavía.
       </p>
     </AppShell>
   );
