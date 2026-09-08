@@ -180,6 +180,8 @@ type Store = {
   streak: number;
   multiplier: number;
   displayName: string;
+  avatarUrl: string | null;
+  bio: string | null;
   posts: AuraPost[];
   habits: Habit[];
   zones: AuraZone[];
@@ -190,6 +192,8 @@ type Store = {
   activatePass: (multiplier: number) => void;
   addHabit: (input: { name: string; points: number; kind: "habit" | "slip" }) => void;
   updateDisplayName: (name: string) => void;
+  updateAvatarUrl: (url: string) => void;
+  updateBio: (bio: string) => void;
   checkInZone: (zoneId: string) => Promise<boolean>;
 };
 
@@ -201,6 +205,8 @@ export function AuraProvider({ children }: { children: ReactNode }) {
   const [multiplier, setMultiplier] = useState(1);
   const [passActive, setPassActive] = useState(false);
   const [displayName, setDisplayName] = useState(GUEST_DISPLAY_NAME);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [bio, setBio] = useState<string | null>(null);
   const [posts, setPosts] = useState(initialPosts);
   const [habits, setHabits] = useState(initialHabits);
   const [zones, setZones] = useState<AuraZone[]>([]);
@@ -236,6 +242,8 @@ export function AuraProvider({ children }: { children: ReactNode }) {
       setMultiplier(profile.multiplier);
       setPassActive(profile.pass_active);
       setDisplayName(profile.display_name);
+      setAvatarUrl(profile.avatar_url);
+      setBio(profile.bio);
     }
 
     async function loadForUser(uid: string) {
@@ -275,6 +283,8 @@ export function AuraProvider({ children }: { children: ReactNode }) {
       setMultiplier(1);
       setPassActive(false);
       setDisplayName(GUEST_DISPLAY_NAME);
+      setAvatarUrl(null);
+      setBio(null);
       setHabits(initialHabits);
     }
 
@@ -310,6 +320,8 @@ export function AuraProvider({ children }: { children: ReactNode }) {
       streak,
       multiplier,
       displayName,
+      avatarUrl,
+      bio,
       passActive,
       posts,
       habits,
@@ -434,6 +446,44 @@ export function AuraProvider({ children }: { children: ReactNode }) {
             }
           });
       },
+      updateAvatarUrl: (url) => {
+        if (!userId) {
+          toast.error("Inicia sesión para editar tu foto");
+          return;
+        }
+        const trimmed = url.trim();
+        const next = trimmed.length > 0 ? trimmed : null;
+        setAvatarUrl(next);
+        supabase
+          .from("profiles")
+          .update({ avatar_url: next })
+          .eq("id", userId)
+          .then(({ error }) => {
+            if (error) {
+              console.error("[aura-store] updateAvatarUrl", error.message);
+              toast.error("No se pudo actualizar la foto");
+            }
+          });
+      },
+      updateBio: (bioText) => {
+        if (!userId) {
+          toast.error("Inicia sesión para editar tu bio");
+          return;
+        }
+        const trimmed = bioText.trim();
+        const next = trimmed.length > 0 ? trimmed : null;
+        setBio(next);
+        supabase
+          .from("profiles")
+          .update({ bio: next })
+          .eq("id", userId)
+          .then(({ error }) => {
+            if (error) {
+              console.error("[aura-store] updateBio", error.message);
+              toast.error("No se pudo actualizar la bio");
+            }
+          });
+      },
       checkInZone: async (zoneId) => {
         if (!userId) {
           toast.error("Inicia sesión para hacer check-in");
@@ -467,7 +517,7 @@ export function AuraProvider({ children }: { children: ReactNode }) {
         return true;
       },
     }),
-    [aura, streak, multiplier, displayName, passActive, posts, habits, zones, userId],
+    [aura, streak, multiplier, displayName, avatarUrl, bio, passActive, posts, habits, zones, userId],
   );
 
   return <AuraContext.Provider value={value}>{children}</AuraContext.Provider>;

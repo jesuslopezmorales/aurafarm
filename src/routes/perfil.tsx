@@ -29,11 +29,27 @@ export const Route = createFileRoute("/perfil")({
 });
 
 function ProfilePage() {
-  const { aura, streak, habits, toggleHabit, multiplier, displayName, updateDisplayName } = useAura();
+  const {
+    aura,
+    streak,
+    habits,
+    toggleHabit,
+    multiplier,
+    displayName,
+    updateDisplayName,
+    avatarUrl,
+    updateAvatarUrl,
+    bio,
+    updateBio,
+  } = useAura();
   const rank = rankFor(aura);
   const progress = Math.min(100, ((aura - rank.min) / (rank.max - rank.min)) * 100);
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState(displayName);
+  const [editingAvatar, setEditingAvatar] = useState(false);
+  const [avatarDraft, setAvatarDraft] = useState(avatarUrl ?? "");
+  const [editingBio, setEditingBio] = useState(false);
+  const [bioDraft, setBioDraft] = useState(bio ?? "");
 
   function startEditingName() {
     setNameDraft(displayName || "Tú");
@@ -45,13 +61,47 @@ function ProfilePage() {
     setEditingName(false);
   }
 
+  function startEditingAvatar() {
+    setAvatarDraft(avatarUrl ?? "");
+    setEditingAvatar(true);
+  }
+
+  function confirmAvatarEdit() {
+    updateAvatarUrl(avatarDraft);
+    setEditingAvatar(false);
+  }
+
+  function startEditingBio() {
+    setBioDraft(bio ?? "");
+    setEditingBio(true);
+  }
+
+  function confirmBioEdit() {
+    updateBio(bioDraft);
+    setEditingBio(false);
+  }
+
   return (
     <AppShell title="Perfil">
       <section className="glass glow-neon relative overflow-hidden rounded-3xl p-5">
         <div className="absolute -top-16 -right-10 size-40 rounded-full bg-primary/25 blur-3xl" />
         <div className="relative flex items-center gap-4">
-          <div className="flex size-16 items-center justify-center rounded-3xl bg-gradient-to-br from-primary to-accent text-2xl font-black text-primary-foreground">
-            T
+          <div className="relative shrink-0">
+            <div className="flex size-16 items-center justify-center overflow-hidden rounded-3xl bg-gradient-to-br from-primary to-accent text-2xl font-black text-primary-foreground">
+              {avatarUrl ? (
+                <img src={avatarUrl} alt="" className="size-full object-cover" />
+              ) : (
+                "T"
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={startEditingAvatar}
+              aria-label="Editar foto"
+              className="absolute -right-1 -bottom-1 flex size-6 items-center justify-center rounded-full border border-border bg-background text-muted-foreground"
+            >
+              <Pencil className="size-3" />
+            </button>
           </div>
           <div className="min-w-0 flex-1">
             {editingName ? (
@@ -99,6 +149,85 @@ function ProfilePage() {
               <Crown className="size-3.5 text-[color:var(--gold)]" /> {rank.name}
             </p>
           </div>
+        </div>
+
+        {editingAvatar && (
+          <div className="relative mt-3 flex items-center gap-1.5">
+            <Input
+              autoFocus
+              value={avatarDraft}
+              onChange={(e) => setAvatarDraft(e.target.value)}
+              placeholder="URL de la imagen"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") confirmAvatarEdit();
+                if (e.key === "Escape") setEditingAvatar(false);
+              }}
+              className="h-8 flex-1 text-sm"
+            />
+            <Button
+              size="icon"
+              variant="ghost"
+              className="size-7"
+              aria-label="Confirmar foto"
+              onClick={confirmAvatarEdit}
+            >
+              <Check className="size-3.5" />
+            </Button>
+            <Button
+              size="icon"
+              variant="ghost"
+              className="size-7"
+              aria-label="Cancelar"
+              onClick={() => setEditingAvatar(false)}
+            >
+              <X className="size-3.5" />
+            </Button>
+          </div>
+        )}
+
+        <div className="relative mt-3">
+          {editingBio ? (
+            <div className="flex items-center gap-1.5">
+              <Input
+                autoFocus
+                value={bioDraft}
+                onChange={(e) => setBioDraft(e.target.value)}
+                placeholder="Escribe tu bio"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") confirmBioEdit();
+                  if (e.key === "Escape") setEditingBio(false);
+                }}
+                className="h-8 flex-1 text-sm"
+              />
+              <Button
+                size="icon"
+                variant="ghost"
+                className="size-7"
+                aria-label="Confirmar bio"
+                onClick={confirmBioEdit}
+              >
+                <Check className="size-3.5" />
+              </Button>
+              <Button
+                size="icon"
+                variant="ghost"
+                className="size-7"
+                aria-label="Cancelar"
+                onClick={() => setEditingBio(false)}
+              >
+                <X className="size-3.5" />
+              </Button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={startEditingBio}
+              className="flex items-center gap-1.5 text-left text-xs text-muted-foreground"
+            >
+              {bio || "Añade una bio"}
+              <Pencil className="size-3 shrink-0" />
+            </button>
+          )}
         </div>
 
         <p className="text-aura font-display relative mt-5 text-4xl font-black">
