@@ -1,5 +1,5 @@
 # AuraFarm — Session State
-_Última actualización: 09.09.26_
+_Última actualización: 11.09.26_
 
 ---
 
@@ -40,27 +40,33 @@ Adjuntar XML a Claude Chat antes de tocar código.
 - Dos hallazgos de seguridad corregidos vía chat de Lovable antes de publicar: (1) política RLS de profiles permitía a cualquier usuario autenticado leer todas las filas de todos los usuarios incluyendo stripe_customer_id — corregida a auth.uid() = id, con una vista pública separada solo para datos no sensibles (display_name, handle, aura, streak, multiplier, avatar_url, bio); (2) esa vista pública quedó creada con SECURITY DEFINER (crítico, se saltaba RLS) — corregida a SECURITY INVOKER.
 - Quedan 4 warnings de seguridad preexistentes sin tocar (fuera de alcance de esta sesión): Stripe billing identifiers junto a datos de perfil ampliamente legibles, posts legibles por cualquier usuario autenticado, datos de zonas legibles por usuarios anónimos, votos legibles por cualquier usuario autenticado.
 
+### Sesión 11.09.26 (cuarta sesión)
+- Sincronización handle real de perfil en aura-store.tsx (addPost usaba "Tú"/"@tuaura" hardcodeados, ahora usa displayName/handle reales) — commit c417bfc.
+- Objetivo 5.1 completado y verificado end-to-end: Aura Master (14,99€/mes, x3), price_id price_1UEQe7Cce8fDVXouLngpzqBo. Backend generalizado: stripe.server.ts (AURA_MASTER_PRICE_ID, PLAN_MULTIPLIERS), stripe-checkout.functions.ts (createCheckoutSession ahora recibe planId: "plus" | "master"), stripe-webhook.ts (multiplicador resuelto dinámicamente por price_id en vez de hardcodeado a 2) — commit 324fa18. Sincronizado y probado en Lovable con pago test, Perfil y Pass reflejan x3 correctamente.
+- Objetivo 6 (ruta /conectar) verificado: carga sin error, detecta sesión activa, lista las 6 herramientas MCP. Sin acción necesaria.
+- .gitignore verificado: repomix-focused-*.xml y .env correctamente excluidos.
+- Bug "lost update" de toggleHabit corregido y verificado en producción: nueva función RPC toggle_habit(p_habit_id, p_done, p_logged_on) creada vía SQL editor de Lovable (update atómico de profiles.aura + habit_logs en una sola transacción de servidor, evita condición de carrera con toggles rápidos). aura-store.tsx actualizado para llamarla vía un cast local (ToggleHabitClient) porque la función no está en types.ts (creada por SQL directo, no por migración de chat, por lo que el types.ts auto-generado no la conoce) — commit 8b6023c. Sincronizado en Lovable, publicado y probado: marcar/desmarcar un hábito varias veces rápido funciona sin pérdida de puntos ni desincronización tras recargar.
+- Hallazgo importante sin resolver: checkInZone (aura-store.tsx) NO implementa ninguna validación real de distancia (Haversine/radio dinámico 1-50km) pese a que la documentación previa (sesión 08.09.26) daba el Objetivo 4B por completado con esa lógica. Solo valida que no haya check-in duplicado el mismo día. Pendiente de implementar de verdad en la próxima sesión — instrucción activa del usuario exige rango dinámico 1-50km según tipo de zona, descartando radios fijos.
+- Probado en producción tras publicar: mapa de Zonas apareció en blanco en el primer intento de carga, coincidiendo con el popup de permiso de geolocalización del navegador; en los intentos siguientes cargó correctamente con los pines. No reproducido con certeza, revisar si se repite en la próxima sesión (posible carrera entre el popup del navegador y el primer render del mapa).
+- UX pendiente en Zonas: el check-in bloquea duplicados en el backend correctamente, pero el botón "Hacer check-in" no cambia de estado tras usarlo (no indica "ya hecho hoy", no se deshabilita) — falta cargar los check-ins del día al entrar a la pantalla y reflejar el estado por zona.
+
 ---
 
 ## 🔴 PENDIENTES — Alta prioridad
-- **Sincronizar aura-store.tsx**: la corrección de carga real del perfil se aplicó SOLO en el editor de Lovable, nunca se ha copiado al Codespace/repo real. Copiar manualmente desde el panel de código de Lovable al Codespace en cuanto se recupere el acceso, tipo-verificar (npx tsc --noEmit) y commitear.
-- **Límite de uso de GitHub Codespaces agotado**: cuenta personal consumió las 60h gratuitas de cómputo (2-core) del mes de septiembre el día 9. No se pudo activar un límite de gasto de pago porque GitHub reporta un fallo interno temporal en Payment information ("Sorry, you can't update your billing information at this time... within 48 hours"). Revisar en la próxima sesión si: (a) el fallo de facturación de GitHub ya se resolvió y se puede activar límite de gasto, o (b) si no, esperar directamente al 1 de octubre (renovación natural del ciclo).
-- Revisar créditos de Lovable disponibles al abrir sesión.
+- Implementar de verdad la validación geoespacial de checkInZone: Haversine + radio dinámico 1-50km según kind de zona (Evento=1km, Patrocinado=5km, Zona salvaje=50km), usando aura_zones.latitude/longitude (ya existen en el esquema) y la posición real del navigator.geolocation ya capturada en zonas.tsx (hoy se descarta, solo "calienta" el permiso).
+- Reflejar en la UI de Zonas qué zonas ya tienen check-in hecho hoy (cargar zone_checkins del día al montar la pantalla, marcar/deshabilitar el botón de la zona correspondiente).
+- Confirmar si el mapa en blanco al primer load (coincidiendo con el popup de geolocalización) se repite; si es reproducible, investigar causa.
 
 ---
 
 ## 🟡 PENDIENTES — Media prioridad
-- Objetivo 5.1 — Aura Master (14,99€/mes, x3): repetir patrón de Aura Pass. Explícitamente pospuesto por Jesús.
-- Objetivo 6: confirmar si /conectar sigue con el error de carga o ya quedó resuelto.
 - Verificar Google OAuth end-to-end en dominio final.
 - Borrar/reutilizar OAuth App de GitHub sin usar (Client ID Ov23liIjtq7POpEfPNkN).
-- Confirmar en próxima sesión que repomix-focused-*.xml quedó correctamente en .gitignore.
 
 ---
 
 ## 🔵 PENDIENTES — Baja prioridad / post-launch
 - Cambiar paleta de color de AuraFarm para diferenciarla de VibeRadar.
-- Arreglar "lost update" de toggleHabit con RPC atómica.
 - Configurar DNS/hosting web de getaurafarmapp.com.
 - Evaluar LOVABLE_DB_MIGRATION_URL (Enterprise).
 - Activar Stripe en modo live (KYC) cuando se decida publicar.
@@ -87,12 +93,16 @@ Adjuntar XML a Claude Chat antes de tocar código.
 - GitHub Codespaces (cuenta personal, gratis): 120 core-hours/mes de cómputo compartidas entre todos los repos — en máquina de 2 núcleos equivale a 60h reales. Se agotan sin previo aviso claro; conviene configurar un "Default idle timeout" bajo (se dejó en 60 min esta sesión, antes en 240) para no desperdiciar horas con el Codespace abierto sin uso.
 - El desglose exacto de consumo de Codespaces (cómputo vs almacenamiento, por repositorio) está en GitHub → Settings → Billing and licensing → Usage, con "Group by: Products" o "Group by: Repositories".
 
+### Sesión 11.09.26
+- Patrón repetido de esta sesión: al pedir "sincroniza X con este contenido exacto" en el chat de Lovable, el pegado se corrompió 2 de 3 veces (mismo problema de truncado ya documentado con types.ts en sesión 08.09.26), y Lovable reconstruyó el JSX por su cuenta sin avisar hasta que se le pidió explícitamente el contenido resultante para comparar. Cada vez que esto pasó, la reconstrucción de Lovable tenía déficits funcionales reales respecto al original (props reordenadas eran inofensivas; pero geolocalización, estado checkingIn anti-doble-tap y estado de carga desaparecieron en el primer intento de zonas.tsx). Nunca asumir "typecheck en verde" como equivalente a "funcionalidad intacta" tras una reconstrucción de Lovable — siempre pedir el contenido final y diff explícito antes de publicar.
+- Créditos de Lovable: quedaron en 1,10 al cierre de esta sesión (empezó con 10; los 3 ciclos de reconstrucción/typecheck consumieron la mayoría). Revisar créditos disponibles al abrir la próxima sesión antes de planificar Objetivo 4B (Haversine) real, que probablemente requiera varias iteraciones de chat de Lovable.
+
 ---
 
 ## 📋 PRÓXIMA TAREA PRIORITARIA
-En cuanto se recupere el acceso al Codespace: sincronizar aura-store.tsx desde Lovable, type-check, commit y push. Después, revisar si el límite de gasto de GitHub ya se puede activar. Con eso resuelto, continuar con Objetivo 5.1 (Aura Master) o Objetivo 6 según créditos de Lovable disponibles.
+Revisar créditos de Lovable disponibles al abrir sesión. Implementar la validación geoespacial real de checkInZone (Haversine, radio dinámico 1-50km por kind de zona) usando aura_zones.latitude/longitude y la posición ya capturada por navigator.geolocation en zonas.tsx. Pedir siempre el contenido final exacto a Lovable tras cada reconstrucción y diffearlo antes de publicar, dado el patrón de pegado corrupto de esta sesión. Después, abordar el estado de check-in en la UI de Zonas y confirmar si el mapa en blanco del primer load se repite.
 
 ---
 
 ## 🔖 ÚLTIMO COMMIT
-Sin cambios de código commiteados esta sesión (todo el trabajo fue vía chat de Lovable, backend y frontend de su editor — pendiente de sincronizar al repo). Último commit real sigue siendo: feat: integracion completa de Stripe para Aura Pass (checkout + webhook) — d19974c
+fix: toggleHabit usa RPC atomica toggle_habit para evitar lost update — 8b6023c
