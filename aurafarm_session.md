@@ -1,5 +1,5 @@
 # AuraFarm — Session State
-_Última actualización: 08.09.26_
+_Última actualización: 09.09.26_
 
 ---
 
@@ -34,12 +34,18 @@ Adjuntar XML a Claude Chat antes de tocar código.
 - Rama de git incorrecta detectada y corregida: los 3 commits de la sesión se hicieron sin darse cuenta en rama local TERMINAL (no main); fusionada con git merge TERMINAL desde main y publicada con éxito.
 - Infraestructura de email corporativo: Zoho Mail (Forever Free) para getaurafarmapp.com. 5 cuentas: admin@, hello@, reports@, support@, noreply@getaurafarmapp.com. DNS en Squarespace: 3x MX, TXT verificación, TXT SPF fusionado, TXT DKIM. Todo verificado y funcional.
 
+### Sesión 09.09.26 (tercera sesión)
+- Objetivo 5 — Stripe/Aura Pass: COMPLETADO Y VERIFICADO DE EXTREMO A EXTREMO. aura-pass.tsx del Codespace confirmado idéntico al de Lovable (solo diferencia cosmética de orden de props, sin impacto). Proyecto publicado por primera vez en Lovable (URL gratuita aura-sync-playground.lovable.app) para poder probar el webhook, que apuntaba a esa URL y devolvía 404 mientras el proyecto no estaba publicado. Pago de prueba realizado con tarjeta 4242 4242 4242 4242, webhook devuelve 200 OK, profiles.pass_active/multiplier se actualizan correctamente en Supabase.
+- Bug crítico encontrado y corregido en Lovable: aura-store.tsx nunca consultaba el perfil real del usuario autenticado (la función de carga simplemente no existía en el código) — por eso la app siempre mostraba datos de invitado (8420 Aura, racha 37d, multiplicador x1) sin importar login ni pagos. Corregido por Lovable; verificado en la app publicada: ahora carga el perfil real (100 Aura, 0d racha, NPC, multiplicador x2 con Aura Pass activo).
+- Dos hallazgos de seguridad corregidos vía chat de Lovable antes de publicar: (1) política RLS de profiles permitía a cualquier usuario autenticado leer todas las filas de todos los usuarios incluyendo stripe_customer_id — corregida a auth.uid() = id, con una vista pública separada solo para datos no sensibles (display_name, handle, aura, streak, multiplier, avatar_url, bio); (2) esa vista pública quedó creada con SECURITY DEFINER (crítico, se saltaba RLS) — corregida a SECURITY INVOKER.
+- Quedan 4 warnings de seguridad preexistentes sin tocar (fuera de alcance de esta sesión): Stripe billing identifiers junto a datos de perfil ampliamente legibles, posts legibles por cualquier usuario autenticado, datos de zonas legibles por usuarios anónimos, votos legibles por cualquier usuario autenticado.
+
 ---
 
 ## 🔴 PENDIENTES — Alta prioridad
-- Objetivo 5, terminar: pedir a Lovable que aplique en su editor el mismo aura-pass.tsx ya hecho en el Codespace, para probar el pago desde el preview de Lovable (único sitio con SUPABASE_SERVICE_ROLE_KEY).
-- Realizar el primer pago de prueba (tarjeta 4242 4242 4242 4242) y confirmar que el webhook activa pass_active/multiplier en profiles.
-- Revisar créditos de Lovable al abrir sesión — quedaba 1 crédito al cierre.
+- **Sincronizar aura-store.tsx**: la corrección de carga real del perfil se aplicó SOLO en el editor de Lovable, nunca se ha copiado al Codespace/repo real. Copiar manualmente desde el panel de código de Lovable al Codespace en cuanto se recupere el acceso, tipo-verificar (npx tsc --noEmit) y commitear.
+- **Límite de uso de GitHub Codespaces agotado**: cuenta personal consumió las 60h gratuitas de cómputo (2-core) del mes de septiembre el día 9. No se pudo activar un límite de gasto de pago porque GitHub reporta un fallo interno temporal en Payment information ("Sorry, you can't update your billing information at this time... within 48 hours"). Revisar en la próxima sesión si: (a) el fallo de facturación de GitHub ya se resolvió y se puede activar límite de gasto, o (b) si no, esperar directamente al 1 de octubre (renovación natural del ciclo).
+- Revisar créditos de Lovable disponibles al abrir sesión.
 
 ---
 
@@ -73,12 +79,20 @@ Adjuntar XML a Claude Chat antes de tocar código.
 - Verificar git branch --show-current al abrir sesión — es fácil commitear varias sesiones en una rama que no es main sin darse cuenta.
 - Agrupar varias migraciones en una sola petición a Lovable maximiza créditos limitados.
 
+### Sesión 09.09.26
+- Un pago de Stripe correcto y un webhook con 200 OK no garantizan que el frontend refleje el cambio: si la lógica de carga de datos del usuario autenticado tiene un bug (o falta directamente), la app puede seguir mostrando datos de invitado indefinidamente sin ningún error visible en consola ni en Network — hay que verificar explícitamente que existe una petición real a la tabla relevante, no solo que el backend respondió bien.
+- El webhook de Stripe apunta a la URL de publicación de Lovable (*.lovable.app), no a la URL de preview del editor — sin publicar el proyecto al menos una vez, el webhook recibe 404 aunque el resto del flujo esté bien configurado.
+- Tras cualquier corrección de seguridad o de lógica en el editor de Lovable, hay que republicar explícitamente para que el sitio público sirva el cambio — publicar no es automático.
+- La sesión de Supabase Auth no se comparte entre el preview del editor de Lovable y el sitio publicado (dominios distintos) — hay que loguearse por separado en cada uno al probar.
+- GitHub Codespaces (cuenta personal, gratis): 120 core-hours/mes de cómputo compartidas entre todos los repos — en máquina de 2 núcleos equivale a 60h reales. Se agotan sin previo aviso claro; conviene configurar un "Default idle timeout" bajo (se dejó en 60 min esta sesión, antes en 240) para no desperdiciar horas con el Codespace abierto sin uso.
+- El desglose exacto de consumo de Codespaces (cómputo vs almacenamiento, por repositorio) está en GitHub → Settings → Billing and licensing → Usage, con "Group by: Products" o "Group by: Repositories".
+
 ---
 
 ## 📋 PRÓXIMA TAREA PRIORITARIA
-Pedir a Lovable que aplique el aura-pass.tsx actualizado en su propio editor para completar la prueba end-to-end del pago de Aura Pass desde el preview de Lovable. Revisar créditos disponibles antes de empezar (quedaba 1 al cierre). Después, continuar con Objetivo 5.1 (Aura Master) si hay margen, o pasar a Objetivo 6 y tareas de Media prioridad.
+En cuanto se recupere el acceso al Codespace: sincronizar aura-store.tsx desde Lovable, type-check, commit y push. Después, revisar si el límite de gasto de GitHub ya se puede activar. Con eso resuelto, continuar con Objetivo 5.1 (Aura Master) o Objetivo 6 según créditos de Lovable disponibles.
 
 ---
 
 ## 🔖 ÚLTIMO COMMIT
-feat: integracion completa de Stripe para Aura Pass (checkout + webhook) — d19974c (fusionado de rama TERMINAL a main, pushed a origin/main)
+Sin cambios de código commiteados esta sesión (todo el trabajo fue vía chat de Lovable, backend y frontend de su editor — pendiente de sincronizar al repo). Último commit real sigue siendo: feat: integracion completa de Stripe para Aura Pass (checkout + webhook) — d19974c
