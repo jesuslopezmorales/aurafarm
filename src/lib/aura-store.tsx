@@ -181,6 +181,23 @@ function handleFromProfile(profile: ProfileRow): string {
   return raw ? `@${raw.replace(/^@/, "")}` : GUEST_HANDLE;
 }
 
+/**
+ * toggle_habit(p_habit_id uuid, p_done boolean, p_logged_on date) is a Postgres RPC
+ * created directly via Lovable's SQL editor (not through a schema-chat migration), so it
+ * is absent from the auto-generated src/integrations/supabase/types.ts (off-limits, never
+ * hand-edited here). This narrow, local type lets us call it without weakening the
+ * typing of the shared `supabase` client anywhere else.
+ */
+type ToggleHabitClient = {
+  rpc: (
+    fn: "toggle_habit",
+    args: { p_habit_id: string; p_done: boolean; p_logged_on: string },
+  ) => PromiseLike<{
+    data: { new_aura: number }[] | null;
+    error: { message: string } | null;
+  }>;
+};
+
 type Store = {
   aura: number;
   streak: number;
@@ -357,34 +374,30 @@ export function AuraProvider({ children }: { children: ReactNode }) {
         const target = habits.find((h) => h.id === habitId);
         if (!target) return;
         const done = !target.done;
-        const delta = (done ? target.points : -target.points) * multiplier;
-        const nextAura = Math.max(0, aura + delta);
 
         setHabits((prev) => prev.map((h) => (h.id === habitId ? { ...h, done } : h)));
-        setAura(nextAura);
 
-        if (!userId) return;
+        if (!userId) {
+          const delta = (done ? target.points : -target.points) * multiplier;
+          setAura((a) => Math.max(0, a + delta));
+          return;
+        }
 
-        const today = todayIso();
-        const logOp = done
-          ? supabase.from("habit_logs").insert({ habit_id: habitId, user_id: userId, logged_on: today })
-          : supabase
-              .from("habit_logs")
-              .delete()
-              .eq("habit_id", habitId)
-              .eq("user_id", userId)
-              .eq("logged_on", today);
-
-        logOp.then(({ error }) => {
-          if (error) console.error("[aura-store] habit_logs", error.message);
-        });
-
-        supabase
-          .from("profiles")
-          .update({ aura: nextAura })
-          .eq("id", userId)
-          .then(({ error }) => {
-            if (error) console.error("[aura-store] profiles.aura", error.message);
+        (supabase as unknown as ToggleHabitClient)
+          .rpc("toggle_habit", {
+            p_habit_id: habitId,
+            p_done: done,
+            p_logged_on: todayIso(),
+          })
+          .then(({ data, error }) => {
+            if (error) {
+              console.error("[aura-store] toggle_habit", error.message);
+              toast.error("No se pudo guardar el hábito");
+              setHabits((prev) => prev.map((h) => (h.id === habitId ? { ...h, done: !done } : h)));
+              return;
+            }
+            const row = data?.[0];
+            if (row) setAura(row.new_aura);
           });
       },
       addPost: ({ action, detail, points, category }) => {
