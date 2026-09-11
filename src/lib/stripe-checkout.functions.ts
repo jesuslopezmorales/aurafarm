@@ -1,12 +1,24 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
+type PlanId = "plus" | "master";
+
 export const createCheckoutSession = createServerFn({ method: "POST" })
+  .validator((data: unknown): { planId: PlanId } => {
+    const planId = (data as { planId?: unknown } | undefined)?.planId;
+    if (planId !== "plus" && planId !== "master") {
+      throw new Error("Invalid planId");
+    }
+    return { planId };
+  })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
+  .handler(async ({ data, context }) => {
+    const { planId } = data;
     const { supabase, userId, claims } = context;
-    const { getStripe, AURA_PASS_PRICE_ID } = await import("./stripe.server");
+    const { getStripe, AURA_PASS_PRICE_ID, AURA_MASTER_PRICE_ID } = await import("./stripe.server");
     const stripe = getStripe();
+
+    const priceId = planId === "master" ? AURA_MASTER_PRICE_ID : AURA_PASS_PRICE_ID;
 
     const { data: profile } = await supabase
       .from("profiles")
@@ -40,7 +52,7 @@ export const createCheckoutSession = createServerFn({ method: "POST" })
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
       customer: customerId,
-      line_items: [{ price: AURA_PASS_PRICE_ID, quantity: 1 }],
+      line_items: [{ price: priceId, quantity: 1 }],
       client_reference_id: userId,
       subscription_data: { metadata: { supabase_user_id: userId } },
       success_url: `${origin}/aura-pass?checkout=success`,

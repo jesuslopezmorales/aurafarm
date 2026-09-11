@@ -74,7 +74,7 @@ const shop = [
 ];
 
 function PassPage() {
-  const { aura, multiplier, activatePass } = useAura();
+  const { aura, multiplier } = useAura();
   const [selected, setSelected] = useState("plus");
   const [subscribing, setSubscribing] = useState(false);
 
@@ -94,16 +94,15 @@ function PassPage() {
   async function handleActivate() {
     const plan = plans.find((p) => p.id === selected)!;
 
-    if (plan.id !== "plus") {
-      // Sin cobro real configurado todavía para este plan (fuera de alcance de esta sesión).
-      activatePass(plan.multiplier);
-      toast.success(`${plan.name} activo · multiplicador x${plan.multiplier}`);
+    if (plan.id !== "plus" && plan.id !== "master") {
       return;
     }
 
+    const planId = plan.id as "plus" | "master";
+
     setSubscribing(true);
     try {
-      const { url } = await createCheckoutSession();
+      const { url } = await createCheckoutSession({ data: { planId } });
       if (url) {
         window.location.href = url;
       } else {
@@ -204,8 +203,8 @@ function PassPage() {
       </div>
 
       <p className="mt-6 text-center text-[10px] text-muted-foreground">
-        Cancela cuando quieras. Aura Pass se cobra mensualmente vía Stripe; los precios de Aura
-        Master y la tienda de recompensas son de ejemplo, sin cobro activo todavía.
+        Cancela cuando quieras. Aura Pass y Aura Master se cobran mensualmente vía Stripe; los precios
+        de la tienda de recompensas son de ejemplo, sin cobro activo todavía.
       </p>
     </AppShell>
   );
