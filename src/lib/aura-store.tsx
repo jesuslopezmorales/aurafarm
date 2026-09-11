@@ -161,6 +161,7 @@ function localDayRangeIso(): { start: string; end: string } {
 }
 
 const GUEST_DISPLAY_NAME = "Tú";
+const GUEST_HANDLE = "@tuaura";
 
 type ProfileRow = Tables<"profiles">;
 type HabitRow = Tables<"habits">;
@@ -175,11 +176,17 @@ function habitFromRow(row: HabitRow, done: boolean): Habit {
   };
 }
 
+function handleFromProfile(profile: ProfileRow): string {
+  const raw = (profile as { handle?: string | null }).handle;
+  return raw ? `@${raw.replace(/^@/, "")}` : GUEST_HANDLE;
+}
+
 type Store = {
   aura: number;
   streak: number;
   multiplier: number;
   displayName: string;
+  handle: string;
   avatarUrl: string | null;
   bio: string | null;
   posts: AuraPost[];
@@ -205,6 +212,7 @@ export function AuraProvider({ children }: { children: ReactNode }) {
   const [multiplier, setMultiplier] = useState(1);
   const [passActive, setPassActive] = useState(false);
   const [displayName, setDisplayName] = useState(GUEST_DISPLAY_NAME);
+  const [handle, setHandle] = useState(GUEST_HANDLE);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [bio, setBio] = useState<string | null>(null);
   const [posts, setPosts] = useState(initialPosts);
@@ -242,6 +250,7 @@ export function AuraProvider({ children }: { children: ReactNode }) {
       setMultiplier(profile.multiplier);
       setPassActive(profile.pass_active);
       setDisplayName(profile.display_name);
+      setHandle(handleFromProfile(profile));
       setAvatarUrl(profile.avatar_url);
       setBio(profile.bio);
     }
@@ -283,6 +292,7 @@ export function AuraProvider({ children }: { children: ReactNode }) {
       setMultiplier(1);
       setPassActive(false);
       setDisplayName(GUEST_DISPLAY_NAME);
+      setHandle(GUEST_HANDLE);
       setAvatarUrl(null);
       setBio(null);
       setHabits(initialHabits);
@@ -320,6 +330,7 @@ export function AuraProvider({ children }: { children: ReactNode }) {
       streak,
       multiplier,
       displayName,
+      handle,
       avatarUrl,
       bio,
       passActive,
@@ -381,8 +392,8 @@ export function AuraProvider({ children }: { children: ReactNode }) {
         setPosts((prev) => [
           {
             id: `p${Date.now()}`,
-            user: "Tú",
-            handle: "@tuaura",
+            user: displayName,
+            handle,
             rank: rankFor(aura).name,
             time: "ahora",
             action,
@@ -517,7 +528,7 @@ export function AuraProvider({ children }: { children: ReactNode }) {
         return true;
       },
     }),
-    [aura, streak, multiplier, displayName, avatarUrl, bio, passActive, posts, habits, zones, userId],
+    [aura, streak, multiplier, displayName, handle, avatarUrl, bio, passActive, posts, habits, zones, userId],
   );
 
   return <AuraContext.Provider value={value}>{children}</AuraContext.Provider>;
