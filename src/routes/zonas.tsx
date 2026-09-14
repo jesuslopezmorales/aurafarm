@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { MapPin, Navigation, Radio, Users, Zap } from "lucide-react";
+import { Check, MapPin, Navigation, Radio, Users, Zap } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -28,11 +28,12 @@ export const Route = createFileRoute("/zonas")({
 });
 
 function ZonesPage() {
-  const { zones, checkInZone } = useAura();
+  const { zones, checkInZone, checkedInZoneIds } = useAura();
   const [selected, setSelected] = useState<string | null>(null);
   const [checkingIn, setCheckingIn] = useState(false);
   const [position, setPosition] = useState<GeoCoords | null>(null);
   const zone = zones.find((z) => z.id === selected) ?? zones[0] ?? null;
+  const zoneCheckedIn = zone ? checkedInZoneIds.has(zone.id) : false;
 
   useEffect(() => {
     if (typeof navigator === "undefined" || !navigator.geolocation) return;
@@ -47,7 +48,7 @@ function ZonesPage() {
   }, []);
 
   async function handleCheckIn() {
-    if (!zone || checkingIn) return;
+    if (!zone || checkingIn || zoneCheckedIn) return;
     setCheckingIn(true);
     const ok = await checkInZone(zone.id, position);
     setCheckingIn(false);
@@ -105,7 +106,11 @@ function ZonesPage() {
                     : "size-9 border-border bg-background/70",
                 )}
               >
-                <MapPin className={cn("size-4", active ? "text-primary" : "text-accent")} />
+                {checkedInZoneIds.has(z.id) ? (
+                  <Check className={cn("size-4", active ? "text-primary" : "text-accent")} />
+                ) : (
+                  <MapPin className={cn("size-4", active ? "text-primary" : "text-accent")} />
+                )}
               </span>
             </button>
           );
@@ -133,38 +138,53 @@ function ZonesPage() {
           </div>
           <Button
             onClick={handleCheckIn}
-            disabled={checkingIn}
+            disabled={checkingIn || zoneCheckedIn}
             className="mt-3 h-10 w-full rounded-xl bg-gradient-to-r from-primary to-accent text-xs font-bold"
           >
-            <Navigation className="size-4" /> Hacer check-in
+            {zoneCheckedIn ? (
+              <>
+                <Check className="size-4" /> Check-in ya hecho hoy
+              </>
+            ) : (
+              <>
+                <Navigation className="size-4" /> Hacer check-in
+              </>
+            )}
           </Button>
         </div>
       </div>
 
       <h2 className="font-display mt-5 mb-3 text-sm font-semibold">Cerca de ti</h2>
       <ul className="space-y-2">
-        {zones.map((z) => (
-          <li key={z.id}>
-            <button
-              onClick={() => setSelected(z.id)}
-              className={cn(
-                "glass flex w-full items-center gap-3 rounded-2xl px-3.5 py-3 text-left transition-all active:scale-[0.99]",
-                z.id === zone.id && "border-primary/50",
-              )}
-            >
-              <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary/15">
-                <Zap className="size-4 text-primary" />
-              </span>
-              <span className="flex-1">
-                <span className="block text-sm font-semibold">{z.name}</span>
-                <span className="block text-[11px] text-muted-foreground">
-                  {z.kind} · {z.people} personas
+        {zones.map((z) => {
+          const done = checkedInZoneIds.has(z.id);
+          return (
+            <li key={z.id}>
+              <button
+                onClick={() => setSelected(z.id)}
+                className={cn(
+                  "glass flex w-full items-center gap-3 rounded-2xl px-3.5 py-3 text-left transition-all active:scale-[0.99]",
+                  z.id === zone.id && "border-primary/50",
+                )}
+              >
+                <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary/15">
+                  {done ? (
+                    <Check className="size-4 text-primary" />
+                  ) : (
+                    <Zap className="size-4 text-primary" />
+                  )}
                 </span>
-              </span>
-              <span className="text-[11px] font-bold text-accent">{z.multiplier}</span>
-            </button>
-          </li>
-        ))}
+                <span className="flex-1">
+                  <span className="block text-sm font-semibold">{z.name}</span>
+                  <span className="block text-[11px] text-muted-foreground">
+                    {done ? "Check-in hecho hoy" : `${z.kind} · ${z.people} personas`}
+                  </span>
+                </span>
+                <span className="text-[11px] font-bold text-accent">{z.multiplier}</span>
+              </button>
+            </li>
+          );
+        })}
       </ul>
     </AppShell>
   );

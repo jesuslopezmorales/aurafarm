@@ -233,6 +233,7 @@ type Store = {
   posts: AuraPost[];
   habits: Habit[];
   zones: AuraZone[];
+  checkedInZoneIds: Set<string>;
   passActive: boolean;
   vote: (postId: string, vote: Exclude<Vote, null>) => void;
   toggleHabit: (habitId: string) => void;
@@ -259,6 +260,7 @@ export function AuraProvider({ children }: { children: ReactNode }) {
   const [posts, setPosts] = useState(initialPosts);
   const [habits, setHabits] = useState(initialHabits);
   const [zones, setZones] = useState<AuraZone[]>([]);
+  const [checkedInZoneIds, setCheckedInZoneIds] = useState<Set<string>>(new Set());
   const [userId, setUserId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -313,17 +315,30 @@ export function AuraProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      const [habitsRes, logsRes] = await Promise.all([
+      const { start, end } = localDayRangeIso();
+      const [habitsRes, logsRes, checkinsRes] = await Promise.all([
         supabase.from("habits").select("*").eq("user_id", uid),
         supabase.from("habit_logs").select("habit_id").eq("user_id", uid).eq("logged_on", todayIso()),
+        supabase
+          .from("zone_checkins")
+          .select("zone_id")
+          .eq("user_id", uid)
+          .gte("created_at", start)
+          .lt("created_at", end),
       ]);
       if (!active) return;
       if (habitsRes.error) {
         console.error("[aura-store] load habits", habitsRes.error.message);
-        return;
+      } else {
+        const doneIds = new Set((logsRes.data ?? []).map((l) => l.habit_id));
+        setHabits(habitsRes.data.map((row) => habitFromRow(row, doneIds.has(row.id))));
       }
-      const doneIds = new Set((logsRes.data ?? []).map((l) => l.habit_id));
-      setHabits(habitsRes.data.map((row) => habitFromRow(row, doneIds.has(row.id))));
+
+      if (checkinsRes.error) {
+        console.error("[aura-store] load zone checkins", checkinsRes.error.message);
+      } else {
+        setCheckedInZoneIds(new Set((checkinsRes.data ?? []).map((c) => c.zone_id)));
+      }
     }
 
     function resetToGuestDefaults() {
@@ -337,6 +352,7 @@ export function AuraProvider({ children }: { children: ReactNode }) {
       setAvatarUrl(null);
       setBio(null);
       setHabits(initialHabits);
+      setCheckedInZoneIds(new Set());
     }
 
     function syncUser(uid: string | null) {
@@ -378,6 +394,7 @@ export function AuraProvider({ children }: { children: ReactNode }) {
       posts,
       habits,
       zones,
+      checkedInZoneIds,
       vote: (postId, vote) =>
         setPosts((prev) =>
           prev.map((p) => {
@@ -538,6 +555,11 @@ export function AuraProvider({ children }: { children: ReactNode }) {
           return false;
         }
 
+        if (checkedInZoneIds.has(zoneId)) {
+          toast.info("Ya hiciste check-in aquí hoy");
+          return false;
+        }
+
         const zone = zones.find((z) => z.id === zoneId);
         if (zone && zone.latitude != null && zone.longitude != null) {
           if (!coords) {
@@ -569,6 +591,7 @@ export function AuraProvider({ children }: { children: ReactNode }) {
         if (lookup.error) {
           console.error("[aura-store] checkInZone lookup", lookup.error.message);
         } else if (lookup.data.length > 0) {
+          setCheckedInZoneIds((prev) => new Set(prev).add(zoneId));
           toast.info("Ya hiciste check-in aquí hoy");
           return false;
         }
@@ -581,10 +604,25 @@ export function AuraProvider({ children }: { children: ReactNode }) {
           toast.error("No se pudo registrar el check-in");
           return false;
         }
+        setCheckedInZoneIds((prev) => new Set(prev).add(zoneId));
         return true;
       },
     }),
-    [aura, streak, multiplier, displayName, handle, avatarUrl, bio, passActive, posts, habits, zones, userId],
+    [
+      aura,
+      streak,
+      multiplier,
+      displayName,
+      handle,
+      avatarUrl,
+      bio,
+      passActive,
+      posts,
+      habits,
+      zones,
+      checkedInZoneIds,
+      userId,
+    ],
   );
 
   return <AuraContext.Provider value={value}>{children}</AuraContext.Provider>;
