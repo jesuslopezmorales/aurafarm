@@ -40,7 +40,27 @@ export type AuraZone = {
   people: number;
   detail: string;
   live: boolean;
+  latitude: number | null;
+  longitude: number | null;
 };
+
+/** Radio de check-in permitido por tipo de zona, en km. */
+const RADIUS_KM_BY_KIND: Record<AuraZone["kind"], number> = {
+  Evento: 1,
+  Patrocinado: 5,
+  "Zona salvaje": 50,
+};
+
+/** Distancia entre dos coordenadas (fórmula de Haversine), en km. */
+function haversineKm(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
+  const R = 6371;
+  const dLat = ((b.lat - a.lat) * Math.PI) / 180;
+  const dLng = ((b.lng - a.lng) * Math.PI) / 180;
+  const lat1 = (a.lat * Math.PI) / 180;
+  const lat2 = (b.lat * Math.PI) / 180;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
 
 const initialPosts: AuraPost[] = [
   {
@@ -129,6 +149,8 @@ function zoneFromRow(row: Tables<"aura_zones">): AuraZone {
     people: row.people,
     detail: row.detail,
     live: row.live,
+    latitude: row.latitude,
+    longitude: row.longitude,
   };
 }
 
@@ -198,6 +220,8 @@ type ToggleHabitClient = {
   }>;
 };
 
+export type GeoCoords = { latitude: number; longitude: number };
+
 type Store = {
   aura: number;
   streak: number;
@@ -218,7 +242,7 @@ type Store = {
   updateDisplayName: (name: string) => void;
   updateAvatarUrl: (url: string) => void;
   updateBio: (bio: string) => void;
-  checkInZone: (zoneId: string) => Promise<boolean>;
+  checkInZone: (zoneId: string, coords: GeoCoords | null) => Promise<boolean>;
 };
 
 const AuraContext = createContext<Store | null>(null);
@@ -508,10 +532,29 @@ export function AuraProvider({ children }: { children: ReactNode }) {
             }
           });
       },
-      checkInZone: async (zoneId) => {
+      checkInZone: async (zoneId, coords) => {
         if (!userId) {
           toast.error("Inicia sesión para hacer check-in");
           return false;
+        }
+
+        const zone = zones.find((z) => z.id === zoneId);
+        if (zone && zone.latitude != null && zone.longitude != null) {
+          if (!coords) {
+            toast.error("Activa la ubicación para hacer check-in en esta zona");
+            return false;
+          }
+          const distanceKm = haversineKm(
+            { lat: zone.latitude, lng: zone.longitude },
+            { lat: coords.latitude, lng: coords.longitude },
+          );
+          const radiusKm = RADIUS_KM_BY_KIND[zone.kind];
+          if (distanceKm > radiusKm) {
+            toast.error(
+              `Estás a ${distanceKm.toFixed(1)} km de ${zone.name} (máximo ${radiusKm} km)`,
+            );
+            return false;
+          }
         }
 
         const { start, end } = localDayRangeIso();

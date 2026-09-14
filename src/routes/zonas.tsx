@@ -5,7 +5,7 @@ import { toast } from "sonner";
 
 import { AppShell } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
-import { useAura } from "@/lib/aura-store";
+import { type GeoCoords, useAura } from "@/lib/aura-store";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/zonas")({
@@ -31,17 +31,17 @@ function ZonesPage() {
   const { zones, checkInZone } = useAura();
   const [selected, setSelected] = useState<string | null>(null);
   const [checkingIn, setCheckingIn] = useState(false);
+  const [position, setPosition] = useState<GeoCoords | null>(null);
   const zone = zones.find((z) => z.id === selected) ?? zones[0] ?? null;
 
   useEffect(() => {
     if (typeof navigator === "undefined" || !navigator.geolocation) return;
     navigator.geolocation.getCurrentPosition(
-      () => {
-        // Coordinates aren't persisted yet (no location columns in the DB);
-        // this only warms up the permission for next session's proximity check.
+      (pos) => {
+        setPosition({ latitude: pos.coords.latitude, longitude: pos.coords.longitude });
       },
       () => {
-        // Permission denied or unavailable — nothing to block, check-in still works.
+        // Permission denied or unavailable — zones without required coordinates still work.
       },
     );
   }, []);
@@ -49,7 +49,7 @@ function ZonesPage() {
   async function handleCheckIn() {
     if (!zone || checkingIn) return;
     setCheckingIn(true);
-    const ok = await checkInZone(zone.id);
+    const ok = await checkInZone(zone.id, position);
     setCheckingIn(false);
     if (ok) toast.success(`Check-in en ${zone.name} · ${zone.multiplier} activo`);
   }
