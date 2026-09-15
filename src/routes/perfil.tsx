@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Check, Crown, Flame, Minus, Pencil, Plus, Target, TrendingUp, X } from "lucide-react";
+import { Check, Crown, Flame, LogOut, Minus, Pencil, Plus, Target, TrendingUp, X } from "lucide-react";
 import { useState } from "react";
 
 import { AppShell } from "@/components/AppShell";
@@ -41,6 +41,8 @@ function ProfilePage() {
     updateAvatarUrl,
     bio,
     updateBio,
+    isAuthenticated,
+    signOut,
   } = useAura();
   const rank = rankFor(aura);
   const progress = Math.min(100, ((aura - rank.min) / (rank.max - rank.min)) * 100);
@@ -295,6 +297,16 @@ function ProfilePage() {
       </ul>
 
       <NewHabitForm />
+
+      {isAuthenticated && (
+        <Button
+          onClick={signOut}
+          variant="outline"
+          className="mt-6 w-full border-destructive/60 text-destructive hover:bg-destructive/10 hover:text-destructive"
+        >
+          <LogOut className="size-4" /> Cerrar sesión
+        </Button>
+      )}
     </AppShell>
   );
 }

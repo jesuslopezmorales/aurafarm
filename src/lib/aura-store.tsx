@@ -244,6 +244,8 @@ type Store = {
   updateAvatarUrl: (url: string) => void;
   updateBio: (bio: string) => void;
   checkInZone: (zoneId: string, coords: GeoCoords | null) => Promise<boolean>;
+  isAuthenticated: boolean;
+  signOut: () => Promise<void>;
 };
 
 const AuraContext = createContext<Store | null>(null);
@@ -395,6 +397,7 @@ export function AuraProvider({ children }: { children: ReactNode }) {
       habits,
       zones,
       checkedInZoneIds,
+      isAuthenticated: userId !== null,
       vote: (postId, vote) =>
         setPosts((prev) =>
           prev.map((p) => {
@@ -606,6 +609,13 @@ export function AuraProvider({ children }: { children: ReactNode }) {
         }
         setCheckedInZoneIds((prev) => new Set(prev).add(zoneId));
         return true;
+      },
+      signOut: async () => {
+        const { error } = await supabase.auth.signOut();
+        if (error) {
+          console.error("[aura-store] signOut", error.message);
+          toast.error("No se pudo cerrar sesión");
+        }
       },
     }),
     [
