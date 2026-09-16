@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
-import { lovable } from "@/integrations/lovable/index";
 
 function safeNext(value: unknown): string {
   if (typeof value !== "string" || !value.startsWith("/") || value.startsWith("//")) return "/";
@@ -72,15 +71,15 @@ function AuthPage() {
   }
 
   async function google() {
-    const result = await lovable.auth.signInWithOAuth("google", {
-      redirect_uri: `${window.location.origin}${next}`,
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: `${window.location.origin}${next}`,
+      },
     });
-    if (result.error) {
+    if (error) {
       toast.error("No se pudo entrar con Google");
-      return;
     }
-    if (result.redirected) return;
-    window.location.href = next;
   }
 
 
