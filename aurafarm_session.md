@@ -132,4 +132,4 @@ Implementar el bypass del broker de Lovable para Google OAuth en getaurafarmapp.
 ---
 
 ## 🔖 ÚLTIMO COMMIT
-feat: boton de cerrar sesion en Perfil — 80b47db
+docs: cierre de sesion 16.09.26 - migracion a entorno local Windows, parche de mcp-js para rutas Windows, Claude Code CLI instalado — 9c2d559
