@@ -1,5 +1,5 @@
 # AuraFarm — Session State
-_Última actualización: 15.09.26_
+_Última actualización: 16.09.26_
 
 ---
 
@@ -65,6 +65,11 @@ Adjuntar XML a Claude Chat antes de tocar código.
 - Login con Google en www.getaurafarmapp.com falla con 404 en /~oauth/initiate. Causa raíz confirmada leyendo src/integrations/lovable/index.ts: el broker @lovable.dev/cloud-auth-js redirige a rutas (/~oauth/initiate, /~oauth/callback) que solo intercepta la infraestructura de hosting propia de Lovable — no existen en Vercel, el fallo ocurre antes de llegar a Supabase, independiente de los Redirect URLs configurados. Se exploró Cloud → Users → Google → "Your own credentials": el panel sigue ofreciendo únicamente callbacks propios de Lovable (oauth.lovable.app/callback, aura-sync-playground.lovable.app/~oauth/callback) — no resuelve el problema por sí solo. Solución identificada, no implementada: ver PENDIENTES.
 - GitHub Codespaces: cuota mensual agotada al 100% (5$/5$) el 15.09.26, resetea el 01.10.26. Hasta entonces, desarrollo vía clon local o github.dev (editor sin terminal, solo sirve para ediciones de texto con commit/push desde la UI, no para cambios de código que necesiten typecheck/build).
 
+### Sesión 16.09.26 (sexta sesión)
+- Migración del entorno de desarrollo a local en Windows (D:\_JLM_\Proyectos\aurafarm), motivada por el agotamiento de la cuota gratuita de GitHub Codespaces (resetea el 01.10.26): instalación de Node/npm/Git en Windows, clonado del repo, `npm install`, recreación manual de `.env` (gitignored, no viaja con el clon) con VITE_SUPABASE_URL y VITE_SUPABASE_PUBLISHABLE_KEY.
+- Bug de compatibilidad Windows encontrado y parcheado en `@lovable.dev/mcp-js`: la función `assertContains` en `node_modules/@lovable.dev/mcp-js/dist/stacks/tanstack/vite.js` comparaba rutas usando el separador nativo del SO sin normalizar barras, lo que la hacía fallar en Windows (rutas con `\`) aunque el propio archivo ya definía una función `normalizePath` sin usar para ese fin. Parcheado localmente haciendo que `assertContains` normalice ambas rutas con esa `normalizePath` ya existente antes de compararlas. Cambio NO versionado (vive dentro de `node_modules`) — hay que repetirlo manualmente cada vez que se borre `node_modules` y se reinstale desde cero en Windows.
+- Instalación de Claude Code CLI en local y login correcto.
+
 ---
 
 ## 🔴 PENDIENTES — Alta prioridad
@@ -115,6 +120,9 @@ Adjuntar XML a Claude Chat antes de tocar código.
 - El preset automático "Vercel" que ofrece Squarespace al añadir un dominio en Vercel puede usar un CNAME legacy (cname.vercel-dns.com) en vez del valor exacto y más reciente que Vercel recomienda para ese proyecto concreto (166163d75f3ecd0a.vercel-dns-017.com) — ambos "funcionan" (Vercel los valida), pero conviene usar el recomendado en vez del preset automático.
 - El broker de auth propio de Lovable (@lovable.dev/cloud-auth-js) está fuertemente acoplado a la infraestructura de hosting de Lovable — un dominio propio en hosting externo (Vercel, Netlify, etc.) rompe el login social (Google) aunque el resto del backend (Supabase Auth, RLS, tablas) sea completamente compartido y funcional. Verificar esto ANTES de mover el hosting, no después, en futuros proyectos con el mismo patrón (Lovable Cloud + hosting externo).
 - GitHub Codespaces gratuito puede agotarse en menos de una semana con uso intensivo de terminal (varios `npx tsc --noEmit`, `npm run dev` sesiones largas) — vigilar el aviso de GitHub al 75% con más margen, no esperar al 100%.
+
+### Sesión 16.09.26
+- Al reinstalar dependencias en Windows (`npm install` tras clonar o tras borrar `node_modules`), verificar y, si hace falta, reaplicar como primer paso el parche de `assertContains`/`normalizePath` en `node_modules/@lovable.dev/mcp-js/dist/stacks/tanstack/vite.js` (ver Sesión 16.09.26 arriba) — el paquete no es compatible con separadores de ruta de Windows tal cual viene publicado, y el fallo solo se manifiesta al arrancar el servidor MCP, no en la instalación.
 
 ---
 
