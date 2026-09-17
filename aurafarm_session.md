@@ -1,5 +1,5 @@
 # AuraFarm — Session State
-_Última actualización: 16.09.26_
+_Última actualización: 17.09.26_
 
 ---
 
@@ -65,6 +65,13 @@ Adjuntar XML a Claude Chat antes de tocar código.
 - Login con Google en www.getaurafarmapp.com falla con 404 en /~oauth/initiate. Causa raíz confirmada leyendo src/integrations/lovable/index.ts: el broker @lovable.dev/cloud-auth-js redirige a rutas (/~oauth/initiate, /~oauth/callback) que solo intercepta la infraestructura de hosting propia de Lovable — no existen en Vercel, el fallo ocurre antes de llegar a Supabase, independiente de los Redirect URLs configurados. Se exploró Cloud → Users → Google → "Your own credentials": el panel sigue ofreciendo únicamente callbacks propios de Lovable (oauth.lovable.app/callback, aura-sync-playground.lovable.app/~oauth/callback) — no resuelve el problema por sí solo. Solución identificada, no implementada: ver PENDIENTES.
 - GitHub Codespaces: cuota mensual agotada al 100% (5$/5$) el 15.09.26, resetea el 01.10.26. Hasta entonces, desarrollo vía clon local o github.dev (editor sin terminal, solo sirve para ediciones de texto con commit/push desde la UI, no para cambios de código que necesiten typecheck/build).
 
+### Sesión 17.09.26 (séptima sesión)
+- Bypass del broker legacy de OAuth de Lovable completado: `@lovable.dev/cloud-auth-js` dependía de rutas `~oauth/*` que solo existen en dominios servidos por la infraestructura de Lovable, causando 404 en producción (Vercel/getaurafarmapp.com). Sustituida en `src/routes/auth.tsx` la llamada `lovable.auth.signInWithOAuth()` por `supabase.auth.signInWithOAuth()` nativo, e import de lovable eliminado — commit 791401c.
+- Credenciales OAuth propias creadas en Google Cloud Console (proyecto "AuraFarm", id `aurafarm-508811`, cliente "AuraFarm Web") e introducidas en el editor de Lovable (Cloud → Users → Authentication → Google → "Your own credentials").
+- URI de redirección correcta para Google Cloud Console: `https://ybvcomzflnoezonipbde.supabase.co/auth/v1/callback` (URL nativa de GoTrue, no el dominio proxy `c--...-prod.lovable.cloud`). Registradas también las URIs del broker de Lovable (`oauth.lovable.app/callback` y `aura-sync-playground.lovable.app/~oauth/callback`) para no romper el login en el editor.
+- Login con Google verificado y funcionando en local (localhost:8080).
+- Pendiente: verificar el deploy automático de Vercel tras el commit y probar login en producción (getaurafarmapp.com/auth).
+
 ### Sesión 16.09.26 (sexta sesión)
 - Migración del entorno de desarrollo a local en Windows (D:\_JLM_\Proyectos\aurafarm), motivada por el agotamiento de la cuota gratuita de GitHub Codespaces (resetea el 01.10.26): instalación de Node/npm/Git en Windows, clonado del repo, `npm install`, recreación manual de `.env` (gitignored, no viaja con el clon) con VITE_SUPABASE_URL y VITE_SUPABASE_PUBLISHABLE_KEY.
 - Bug de compatibilidad Windows encontrado y parcheado en `@lovable.dev/mcp-js`: la función `assertContains` en `node_modules/@lovable.dev/mcp-js/dist/stacks/tanstack/vite.js` comparaba rutas usando el separador nativo del SO sin normalizar barras, lo que la hacía fallar en Windows (rutas con `\`) aunque el propio archivo ya definía una función `normalizePath` sin usar para ese fin. Parcheado localmente haciendo que `assertContains` normalice ambas rutas con esa `normalizePath` ya existente antes de compararlas. Cambio NO versionado (vive dentro de `node_modules`) — hay que repetirlo manualmente cada vez que se borre `node_modules` y se reinstale desde cero en Windows.
@@ -73,7 +80,7 @@ Adjuntar XML a Claude Chat antes de tocar código.
 ---
 
 ## 🔴 PENDIENTES — Alta prioridad
-- Google OAuth en getaurafarmapp.com: (a) crear credenciales OAuth propias en Google Cloud Console, (b) modificar auth.tsx para que el login de Google llame directamente a supabase.auth.signInWithOAuth() en vez de a lovable.auth.signInWithOAuth() (bypaseando el broker de Lovable), usando como Authorized redirect URI la URL nativa de Supabase (https://ybvcomzfinoezonipbde.supabase.co/auth/v1/callback), (c) introducir esas credenciales propias en Cloud → Users → Google → "Your own credentials" del editor de Lovable. Mientras tanto, Google login solo es fiable en aura-sync-playground.lovable.app; email/contraseña funciona correctamente en ambos dominios.
+- **Verificar Google OAuth en producción**: el bypass se implementó y verificó en local (localhost:8080 — commit 791401c), pero aún no se ha probado en getaurafarmapp.com tras el deploy de Vercel. Confirmar que el flujo completo funciona en el dominio real antes de dar el objetivo por cerrado.
 - Decidir a qué dominio debe apuntar el webhook de Stripe ahora que el frontend de producción real vive en Vercel/getaurafarmapp.com (actualmente sigue apuntando a *.lovable.app; ese proyecto de Lovable nunca se ha publicado con el rebrand/cambios recientes, por lo que el webhook seguiría devolviendo comportamiento inconsistente si se prueba desde ahí).
 
 ---
@@ -124,12 +131,17 @@ Adjuntar XML a Claude Chat antes de tocar código.
 ### Sesión 16.09.26
 - Al reinstalar dependencias en Windows (`npm install` tras clonar o tras borrar `node_modules`), verificar y, si hace falta, reaplicar como primer paso el parche de `assertContains`/`normalizePath` en `node_modules/@lovable.dev/mcp-js/dist/stacks/tanstack/vite.js` (ver Sesión 16.09.26 arriba) — el paquete no es compatible con separadores de ruta de Windows tal cual viene publicado, y el fallo solo se manifiesta al arrancar el servidor MCP, no en la instalación.
 
+### Sesión 17.09.26
+- El endpoint de callback real que usa GoTrue (Supabase) es `https://<project-ref>.supabase.co/auth/v1/callback`, NO el dominio proxy que expone Lovable (`c--...-prod.lovable.cloud`). El proxy de Lovable redirige internamente pero registrarlo en Google Cloud Console como callback no funciona con el flujo PKCE nativo — hay que poner siempre la URL directa de GoTrue.
+- Al bypasear el broker de Lovable se pierde automáticamente el soporte para Apple y Microsoft OAuth (que el broker sí manejaba). Si esos proveedores son necesarios en el futuro, habrá que añadir credenciales propias para cada uno de forma análoga al flujo de Google implementado aquí.
+- El editor de Lovable muestra callbacks propios del broker (`oauth.lovable.app/callback`, `<proyecto>.lovable.app/~oauth/callback`) en el panel de configuración de Google — son los que usa el broker para el editor/frontend de Lovable. Registrarlos también en Google Cloud Console evita romper el login en el editor de Lovable (útil para probar el backend) mientras la app real usa el callback de Supabase.
+
 ---
 
 ## 📋 PRÓXIMA TAREA PRIORITARIA
-Implementar el bypass del broker de Lovable para Google OAuth en getaurafarmapp.com (credenciales propias de Google Cloud Console + supabase.auth.signInWithOAuth() directo en auth.tsx). Después, decidir el destino del webhook de Stripe y corregir los warnings de RLS pendientes. Requiere desarrollo local o clon del repo, dado el agotamiento de cuota de Codespaces hasta el 01.10.26.
+Verificar Google OAuth en producción (getaurafarmapp.com/auth) tras el deploy de Vercel del commit 791401c. Si funciona, pasar a prioridad 2: decidir el destino del webhook de Stripe (¿*.lovable.app o getaurafarmapp.com?). Después, corregir los warnings de RLS pendientes (posts, zonas, votos).
 
 ---
 
 ## 🔖 ÚLTIMO COMMIT
-docs: cierre de sesion 16.09.26 - migracion a entorno local Windows, parche de mcp-js para rutas Windows, Claude Code CLI instalado — 9c2d559
+fix: bypass Lovable OAuth broker, use native Supabase signInWithOAuth — 791401c
