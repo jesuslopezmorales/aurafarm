@@ -1,7 +1,8 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { Flame, Map, Plug, Sparkles, Ticket, User } from "lucide-react";
+import { Flame, Map, Plug, Ticket, User } from "lucide-react";
 import type { ReactNode } from "react";
 
+import { AuraFarmLogo } from "@/components/AuraFarmLogo";
 import { useAura } from "@/lib/aura-store";
 import { cn } from "@/lib/utils";
 
@@ -23,7 +24,7 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
       <header className="glass sticky top-0 z-20 flex items-center justify-between gap-3 px-4 py-3">
         <div className="flex items-center gap-2">
           <span className="glow-neon flex size-9 items-center justify-center rounded-xl bg-primary/20">
-            <Sparkles className="size-4 text-primary" />
+            <AuraFarmLogo className="size-5" />
           </span>
           <div className="leading-tight">
             <p className="font-display text-sm font-semibold">{title}</p>
