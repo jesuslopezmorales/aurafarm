@@ -30,13 +30,13 @@ export default defineTool({
     if (error) return { content: [{ type: "text", text: error.message }], isError: true };
 
     const ids = (data ?? []).map((p) => p.id);
-    const votes = ids.length
-      ? await supabase.from("post_votes").select("post_id, vote").in("post_id", ids)
+    const voteCounts = ids.length
+      ? await supabase.from("post_vote_counts").select("post_id, votes_real, votes_cap").in("post_id", ids)
       : { data: [], error: null };
-    if (votes.error) return { content: [{ type: "text", text: votes.error.message }], isError: true };
+    if (voteCounts.error) return { content: [{ type: "text", text: voteCounts.error.message }], isError: true };
 
     const posts = (data ?? []).map((p) => {
-      const own = (votes.data ?? []).filter((v) => v.post_id === p.id);
+      const counts = (voteCounts.data ?? []).find((v) => v.post_id === p.id);
       return {
         id: p.id,
         action: p.action,
@@ -45,8 +45,8 @@ export default defineTool({
         category: p.category,
         created_at: p.created_at,
         mine: p.user_id === ctx.getUserId(),
-        votes_real: own.filter((v) => v.vote === "real").length,
-        votes_cap: own.filter((v) => v.vote === "cap").length,
+        votes_real: counts?.votes_real ?? 0,
+        votes_cap: counts?.votes_cap ?? 0,
       };
     });
 
