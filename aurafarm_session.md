@@ -65,6 +65,20 @@ Adjuntar XML a Claude Chat antes de tocar código.
 - Login con Google en www.getaurafarmapp.com falla con 404 en /~oauth/initiate. Causa raíz confirmada leyendo src/integrations/lovable/index.ts: el broker @lovable.dev/cloud-auth-js redirige a rutas (/~oauth/initiate, /~oauth/callback) que solo intercepta la infraestructura de hosting propia de Lovable — no existen en Vercel, el fallo ocurre antes de llegar a Supabase, independiente de los Redirect URLs configurados. Se exploró Cloud → Users → Google → "Your own credentials": el panel sigue ofreciendo únicamente callbacks propios de Lovable (oauth.lovable.app/callback, aura-sync-playground.lovable.app/~oauth/callback) — no resuelve el problema por sí solo. Solución identificada, no implementada: ver PENDIENTES.
 - GitHub Codespaces: cuota mensual agotada al 100% (5$/5$) el 15.09.26, resetea el 01.10.26. Hasta entonces, desarrollo vía clon local o github.dev (editor sin terminal, solo sirve para ediciones de texto con commit/push desde la UI, no para cambios de código que necesiten typecheck/build).
 
+### Sesión 18.09.26 (continuación — tarde)
+- Warnings de seguridad RLS revisados vía Lovable Cloud → Seguridad (cambios de BD no versionados en git salvo `list-aura-feed.ts`):
+  - `aura_posts`: sin cambio en política de lectura — el feed sigue público para cualquier autenticado a propósito (lo requiere `list_aura_feed` del MCP). Se añadió política explícita `FOR UPDATE USING (false)` ("Posts are immutable"): no existía ninguna política UPDATE y el linter de Lovable lo señalaba como warning.
+  - `post_votes`: eliminada la política SELECT abierta a todos los autenticados; ahora solo el propio voto es legible vía la política ALL existente (`user_id = auth.uid()`). Creada vista `post_vote_counts` (agregada, `SECURITY INVOKER`) para exponer conteos sin revelar identidad del votante. `src/lib/mcp/tools/list-aura-feed.ts` actualizado para leer de esa vista en vez de la tabla cruda — commit d81c24a (+ c9785f2 que elimina el archivo `type` residual).
+  - `toggle_habit` (RPC): revocado `EXECUTE` de `anon`/`PUBLIC` en SQL editor de Lovable (cambio no versionado en git); ahora solo el rol `authenticated` puede ejecutarla.
+  - 2 warnings descartados con "Ignore issue" en Lovable: (1) "Signed-In Users Can Execute SECURITY DEFINER Function" — `toggle_habit` necesita `SECURITY DEFINER` para escribir `profiles.aura` con privilegios elevados, intencional y auditado; (2) "profiles restricted access" — el propio linter de Lovable lo etiqueta "Not a vulnerability".
+- Logo de AuraFarm completado end-to-end:
+  - Concepto: hexágono facetado diseñado en Illustrator; paleta cálida ámbar/coral/magenta (#ffa931, #fe874d, #ff6951, #ff3c76) elegida intencionalmente para diferenciarse de la paleta morada de VibeRadar.
+  - Assets desplegados en `public/`: `favicon.png`, `icon-192.png`, `icon-512.png`, `og-image.png` — commit 625daf3. Asset de trabajo `aurafarm-iconos-preview.png` eliminado — commit f9e1a53.
+  - `manifest.webmanifest` actualizado — incluye referencia a `icon-512-maskable.png` (purpose: maskable), pero **ese archivo no existe en el repo** (referenciado pero no commiteado — bloqueante para PWA en Android, ver PENDIENTES).
+  - `src/routes/__root.tsx`: añadidas meta tags `og:image` (1200×630), `og:image:width/height` y `twitter:image` con URL absoluta de producción (`https://www.getaurafarmapp.com/og-image.png`) — commit 625daf3.
+  - `src/components/AuraFarmLogo.tsx`: nuevo componente SVG inline (4 polígonos, hexágono facetado) — commit 2c79b95.
+  - `src/components/AppShell.tsx`: icono provisional `Sparkles` sustituido por `<AuraFarmLogo className="size-5" />` en el badge del header — commit 2c79b95.
+
 ### Sesión 18.09.26 (octava sesión)
 - Login con Google verificado funcionando en producción (getaurafarmapp.com/auth) — objetivo de la sesión anterior cerrado.
 - Stripe configurado end-to-end en modo **Live**:
@@ -89,12 +103,12 @@ Adjuntar XML a Claude Chat antes de tocar código.
 ---
 
 ## 🔴 PENDIENTES — Alta prioridad
-- Corregir warnings de seguridad de RLS: posts legibles por cualquier usuario autenticado, datos de zonas legibles por usuarios anónimos, votos legibles por cualquier usuario autenticado. Revisar en Lovable Cloud → Seguridad (o SQL editor). Consume créditos si requiere migración.
+- Verificar en producción tras el deploy: favicon en pestaña del navegador, "Añadir a pantalla de inicio" en móvil (iconos correctos), header mostrando el logo real, og:image en Facebook Sharing Debugger / Twitter Card Validator (ojo con cache de scrapers sociales).
+- `public/icon-512-maskable.png`: referenciado en `manifest.webmanifest` (purpose: maskable) pero no existe en el repo — bloqueante antes de dar el logo por terminado y antes de que usuarios instalen la PWA en Android.
 
 ---
 
 ## 🟡 PENDIENTES — Media prioridad
-- Logo principal de AuraFarm: pendiente de incluir en la app/web (nunca se ha hecho).
 - Lost update en `aura-store.tsx`: `toggleHabit` escribe `profiles.aura` como valor absoluto calculado en cliente — pendiente mover a RPC atómica en Postgres para eliminar la condición de carrera con actualizaciones concurrentes del Aura desde otras fuentes.
 - Verificar Stripe Live de extremo a extremo con un pago real (tarjeta real) y confirmar que `profiles.pass_active` y `multiplier` se actualizan correctamente vía webhook.
 - Revisar/ampliar el límite de gasto de GitHub Codespaces si se quiere seguir usando antes del 01.10.26.
@@ -146,6 +160,11 @@ Adjuntar XML a Claude Chat antes de tocar código.
 - Al bypasear el broker de Lovable se pierde automáticamente el soporte para Apple y Microsoft OAuth (que el broker sí manejaba). Si esos proveedores son necesarios en el futuro, habrá que añadir credenciales propias para cada uno de forma análoga al flujo de Google implementado aquí.
 - El editor de Lovable muestra callbacks propios del broker (`oauth.lovable.app/callback`, `<proyecto>.lovable.app/~oauth/callback`) en el panel de configuración de Google — son los que usa el broker para el editor/frontend de Lovable. Registrarlos también en Google Cloud Console evita romper el login en el editor de Lovable (útil para probar el backend) mientras la app real usa el callback de Supabase.
 
+### Sesión 18.09.26 (continuación — tarde)
+- Un warning de RLS de tipo "missing UPDATE policy" no significa que la tabla sea escribible sin control — en Supabase, si no existe ninguna política UPDATE, la operación falla para todos los roles (deny-by-default). Añadir `FOR UPDATE USING (false)` es un patrón explícito para silenciar el linter cuando la intención es exactamente esa (tabla inmutable en producción), sin cambiar el comportamiento real.
+- Si una vista con `SECURITY INVOKER` agrega datos de una tabla con RLS restrictiva, los usuarios que no tienen acceso SELECT a la tabla sí pueden leer la vista siempre que el owner de la vista tenga ese acceso y la vista solo exponga columnas calculadas (no filas individuales identificables) — este es el patrón de `post_vote_counts`: los votantes individuales no son visibles, solo los conteos.
+- Cambios de permisos sobre RPCs en Lovable (REVOKE EXECUTE) no generan migración y no aparecen en el historial de git — documentarlos en el session log es la única fuente de verdad.
+
 ### Sesión 18.09.26
 - El webhook de Stripe en Vercel debe apuntar siempre al dominio con `www` (`https://www.getaurafarmapp.com/...`), no al apex (`https://getaurafarmapp.com/...`), porque Vercel emite un 308 en el apex que Stripe no sigue — el webhook llega a 308 y marca el evento como fallido.
 - `SUPABASE_SERVICE_ROLE_KEY` sigue siendo inaccesible en Vercel (y en cualquier hosting externo a Lovable), pero las server functions del checkout (`stripe-checkout.functions.ts`) no la necesitan si se usa el cliente Supabase autenticado del usuario en lugar de `supabaseAdmin` — el cliente autenticado tiene los permisos correctos para leer/escribir la propia fila de `profiles` gracias a la política RLS `auth.uid() = id`.
@@ -154,9 +173,9 @@ Adjuntar XML a Claude Chat antes de tocar código.
 ---
 
 ## 📋 PRÓXIMA TAREA PRIORITARIA
-Corregir los warnings de seguridad de RLS (posts/zonas/votos) via Lovable Cloud → Seguridad o SQL editor. Después: verificar Stripe Live end-to-end con pago real (tarjeta real) y confirmar actualización de `profiles.pass_active`/`multiplier`.
+Verificar en producción tras el deploy: favicon en pestaña del navegador, "Añadir a pantalla de inicio" en móvil (iconos correctos), header mostrando el logo real, og:image en Facebook Sharing Debugger / Twitter Card Validator (ojo con cache de scrapers). Crear y commitear `public/icon-512-maskable.png` (bloqueante para PWA). Después: verificar Stripe Live end-to-end con pago real.
 
 ---
 
 ## 🔖 ÚLTIMO COMMIT
-fix: update Stripe price IDs to Live mode — ebb7aa0
+feat: replace placeholder Sparkles icon with real AuraFarm logo in header — 2c79b95
