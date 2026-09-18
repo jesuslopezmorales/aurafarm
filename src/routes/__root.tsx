@@ -62,7 +62,7 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
           >
             Try again
           </button>
-          <a
+<a          
             href="/"
             className="inline-flex items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent"
           >
@@ -95,7 +95,11 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         content: "Desarrollo personal gamificado con pruebas reales y comunidad.",
       },
       { property: "og:type", content: "website" },
+      { property: "og:image", content: "https://www.getaurafarmapp.com/og-image.png" },
+      { property: "og:image:width", content: "1200" },
+      { property: "og:image:height", content: "630" },
       { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:image", content: "https://www.getaurafarmapp.com/og-image.png" },
       { name: "apple-mobile-web-app-capable", content: "yes" },
       { name: "apple-mobile-web-app-status-bar-style", content: "black-translucent" },
       { name: "apple-mobile-web-app-title", content: "AuraFarm" },
@@ -146,4 +150,3 @@ function RootComponent() {
     </QueryClientProvider>
   );
 }
-
