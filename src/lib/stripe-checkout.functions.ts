@@ -36,8 +36,7 @@ export const createCheckoutSession = createServerFn({ method: "POST" })
         metadata: { supabase_user_id: userId },
       });
       customerId = customer.id;
-      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-      await supabaseAdmin
+      await supabase
         .from("profiles")
         .update({ stripe_customer_id: customerId })
         .eq("id", userId);
