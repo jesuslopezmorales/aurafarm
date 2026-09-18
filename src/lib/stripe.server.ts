@@ -1,7 +1,7 @@
 import Stripe from "stripe";
 
-export const AURA_PASS_PRICE_ID = "price_1UDMkCCce8fDVXouqcJEhGYn";
-export const AURA_MASTER_PRICE_ID = "price_1UEQe7Cce8fDVXouLngpzqBo";
+export const AURA_PASS_PRICE_ID = "price_1UGfIzE832UCdFMQYMTjjRhk";
+export const AURA_MASTER_PRICE_ID = "price_1UGfItE832UCdFMQ4E2bNUnL";
 
 export const PLAN_MULTIPLIERS: Record<string, number> = {
   [AURA_PASS_PRICE_ID]: 2,
