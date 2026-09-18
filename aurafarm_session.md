@@ -1,5 +1,5 @@
 # AuraFarm — Session State
-_Última actualización: 17.09.26_
+_Última actualización: 18.09.26_
 
 ---
 
@@ -21,7 +21,7 @@ Adjuntar XML a Claude Chat antes de tocar código.
 - El **frontend** (componentes .tsx) vive en DOS copias independientes que no se sincronizan solas: 1) el repo real (jesuslopezmorales/aurafarm, editado desde el Codespace, **desplegado en producción vía Vercel en getaurafarmapp.com**) — esta es la fuente de verdad del frontend y lo que ven los usuarios reales; 2) el proyecto interno de Lovable (editor propio, publicado en aura-sync-playground.lovable.app) — desactualizado respecto al repo real desde el rebrand a AuraFarm, solo se actualiza si se le pide explícitamente por su chat.
 - El **backend** (Supabase/Lovable Cloud: tablas, columnas, Edge Functions, secretos, configuración de Auth) es único y compartido — cualquier cambio de esquema, backend o Auth se hace vía el chat/panel de Lovable, y aplica sea cual sea el frontend usado (Vercel o Lovable).
 - Tras cualquier cambio de esquema o backend pedido a Lovable, hay que sincronizar manualmente al Codespace/repo: copiar types.ts y los archivos de backend nuevos desde el panel de código de Lovable (panel derecho, buscador de archivos) y pegarlos — git pull NO trae estos cambios porque Lovable no hace push al repo real.
-- **Secretos con dos niveles de acceso:** VITE_* (cliente) y su equivalente sin prefijo (servidor) deben estar AMBOS en .env del Codespace si se quiere probar desde ahí. En Vercel solo se han configurado las dos variables VITE_* (Environment Variables del proyecto en Vercel, no en .env) — las de Stripe (STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET) NO están en Vercel, son secretos de servidor usados solo en las Edge Functions de Lovable. SUPABASE_SERVICE_ROLE_KEY NUNCA es accesible, ni pidiéndosela a Lovable — confirmado explícitamente el 08.09.26.
+- **Secretos con dos niveles de acceso:** VITE_* (cliente) y su equivalente sin prefijo (servidor) deben estar AMBOS en .env del Codespace si se quiere probar desde ahí. En Vercel (Production) están configuradas: `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` (cliente), `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY` (servidor, mismo valor sin prefijo), `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` (añadidas el 18.09.26). `SUPABASE_SERVICE_ROLE_KEY` NUNCA es accesible fuera de Lovable — confirmado explícitamente el 08.09.26.
 - **Broker de auth de Lovable (@lovable.dev/cloud-auth-js, src/integrations/lovable/index.ts) solo funciona en dominios servidos por la infraestructura de Lovable** (published *.lovable.app, o un dominio custom conectado a través de Lovable, que requiere plan Pro). Redirige a rutas propias (/~oauth/initiate, /~oauth/callback) que no existen fuera de ese hosting — en Vercel devuelven 404. Detalle completo en PENDIENTES.
 
 ---
@@ -65,12 +65,21 @@ Adjuntar XML a Claude Chat antes de tocar código.
 - Login con Google en www.getaurafarmapp.com falla con 404 en /~oauth/initiate. Causa raíz confirmada leyendo src/integrations/lovable/index.ts: el broker @lovable.dev/cloud-auth-js redirige a rutas (/~oauth/initiate, /~oauth/callback) que solo intercepta la infraestructura de hosting propia de Lovable — no existen en Vercel, el fallo ocurre antes de llegar a Supabase, independiente de los Redirect URLs configurados. Se exploró Cloud → Users → Google → "Your own credentials": el panel sigue ofreciendo únicamente callbacks propios de Lovable (oauth.lovable.app/callback, aura-sync-playground.lovable.app/~oauth/callback) — no resuelve el problema por sí solo. Solución identificada, no implementada: ver PENDIENTES.
 - GitHub Codespaces: cuota mensual agotada al 100% (5$/5$) el 15.09.26, resetea el 01.10.26. Hasta entonces, desarrollo vía clon local o github.dev (editor sin terminal, solo sirve para ediciones de texto con commit/push desde la UI, no para cambios de código que necesiten typecheck/build).
 
+### Sesión 18.09.26 (octava sesión)
+- Login con Google verificado funcionando en producción (getaurafarmapp.com/auth) — objetivo de la sesión anterior cerrado.
+- Stripe configurado end-to-end en modo **Live**:
+  - Cuenta Stripe activada en Live (particular/Vendedor, categoría Software, transferencias a Revolut EUR, estado fiscal "todavía no estoy vendiendo").
+  - Webhook Live creado (`aurafarm-stripe-webhook-live`) apuntando a `https://www.getaurafarmapp.com/api/public/stripe-webhook` (con `www`, necesario por el 308 redirect permanente que Vercel emite en el dominio sin prefijo).
+  - Variables de entorno añadidas en Vercel (Production): `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY` (las dos últimas son las mismas claves que `VITE_SUPABASE_*` pero sin prefijo, necesarias para las server functions).
+  - Fix en `src/lib/stripe-checkout.functions.ts` (commit b063350): sustituido `supabaseAdmin` (requería `SUPABASE_SERVICE_ROLE_KEY`, nunca accesible fuera de Lovable) por el cliente `supabase` ya autenticado del usuario, para leer y actualizar `stripe_customer_id` sin necesitar esa clave.
+  - Fix en `src/lib/stripe.server.ts` (commit ebb7aa0): `AURA_PASS_PRICE_ID` y `AURA_MASTER_PRICE_ID` actualizados de IDs de modo Test (`price_1UDMkCCce8fDVXouqcJEhGYn`, `price_1UEQe7Cce8fDVXouLngpzqBo`) a los IDs reales de Live (`price_1UGfIzE832UCdFMQYMTjjRhk` y `price_1UGfItE832UCdFMQ4E2bNUnL`).
+  - Verificado: el botón "Activar Aura Pass" en producción llega correctamente a la pantalla de Checkout de Stripe con formulario de pago real.
+
 ### Sesión 17.09.26 (séptima sesión)
 - Bypass del broker legacy de OAuth de Lovable completado: `@lovable.dev/cloud-auth-js` dependía de rutas `~oauth/*` que solo existen en dominios servidos por la infraestructura de Lovable, causando 404 en producción (Vercel/getaurafarmapp.com). Sustituida en `src/routes/auth.tsx` la llamada `lovable.auth.signInWithOAuth()` por `supabase.auth.signInWithOAuth()` nativo, e import de lovable eliminado — commit 791401c.
 - Credenciales OAuth propias creadas en Google Cloud Console (proyecto "AuraFarm", id `aurafarm-508811`, cliente "AuraFarm Web") e introducidas en el editor de Lovable (Cloud → Users → Authentication → Google → "Your own credentials").
 - URI de redirección correcta para Google Cloud Console: `https://ybvcomzflnoezonipbde.supabase.co/auth/v1/callback` (URL nativa de GoTrue, no el dominio proxy `c--...-prod.lovable.cloud`). Registradas también las URIs del broker de Lovable (`oauth.lovable.app/callback` y `aura-sync-playground.lovable.app/~oauth/callback`) para no romper el login en el editor.
-- Login con Google verificado y funcionando en local (localhost:8080).
-- Pendiente: verificar el deploy automático de Vercel tras el commit y probar login en producción (getaurafarmapp.com/auth).
+- Login con Google verificado y funcionando en local (localhost:8080) y posteriormente en producción (getaurafarmapp.com/auth — confirmado en sesión 18.09.26).
 
 ### Sesión 16.09.26 (sexta sesión)
 - Migración del entorno de desarrollo a local en Windows (D:\_JLM_\Proyectos\aurafarm), motivada por el agotamiento de la cuota gratuita de GitHub Codespaces (resetea el 01.10.26): instalación de Node/npm/Git en Windows, clonado del repo, `npm install`, recreación manual de `.env` (gitignored, no viaja con el clon) con VITE_SUPABASE_URL y VITE_SUPABASE_PUBLISHABLE_KEY.
@@ -80,13 +89,14 @@ Adjuntar XML a Claude Chat antes de tocar código.
 ---
 
 ## 🔴 PENDIENTES — Alta prioridad
-- **Verificar Google OAuth en producción**: el bypass se implementó y verificó en local (localhost:8080 — commit 791401c), pero aún no se ha probado en getaurafarmapp.com tras el deploy de Vercel. Confirmar que el flujo completo funciona en el dominio real antes de dar el objetivo por cerrado.
-- Decidir a qué dominio debe apuntar el webhook de Stripe ahora que el frontend de producción real vive en Vercel/getaurafarmapp.com (actualmente sigue apuntando a *.lovable.app; ese proyecto de Lovable nunca se ha publicado con el rebrand/cambios recientes, por lo que el webhook seguiría devolviendo comportamiento inconsistente si se prueba desde ahí).
+- Corregir warnings de seguridad de RLS: posts legibles por cualquier usuario autenticado, datos de zonas legibles por usuarios anónimos, votos legibles por cualquier usuario autenticado. Revisar en Lovable Cloud → Seguridad (o SQL editor). Consume créditos si requiere migración.
 
 ---
 
 ## 🟡 PENDIENTES — Media prioridad
-- Corregir warnings de seguridad preexistentes de RLS: posts legibles por cualquier usuario autenticado, datos de zonas legibles por usuarios anónimos, votos legibles por cualquier usuario autenticado.
+- Logo principal de AuraFarm: pendiente de incluir en la app/web (nunca se ha hecho).
+- Lost update en `aura-store.tsx`: `toggleHabit` escribe `profiles.aura` como valor absoluto calculado en cliente — pendiente mover a RPC atómica en Postgres para eliminar la condición de carrera con actualizaciones concurrentes del Aura desde otras fuentes.
+- Verificar Stripe Live de extremo a extremo con un pago real (tarjeta real) y confirmar que `profiles.pass_active` y `multiplier` se actualizan correctamente vía webhook.
 - Revisar/ampliar el límite de gasto de GitHub Codespaces si se quiere seguir usando antes del 01.10.26.
 
 ---
@@ -94,7 +104,7 @@ Adjuntar XML a Claude Chat antes de tocar código.
 ## 🔵 PENDIENTES — Baja prioridad / post-launch
 - Cambiar paleta de color de AuraFarm para diferenciarla de VibeRadar.
 - Evaluar LOVABLE_DB_MIGRATION_URL (Enterprise).
-- Activar Stripe en modo live (KYC) cuando se decida publicar.
+- Activar Stripe KYC completo (verificación de identidad para recibir pagos reales).
 - Empaquetado Android (Capacitor vs TWA), cuenta Google Play Developer, política de privacidad/términos.
 
 ---
@@ -136,12 +146,17 @@ Adjuntar XML a Claude Chat antes de tocar código.
 - Al bypasear el broker de Lovable se pierde automáticamente el soporte para Apple y Microsoft OAuth (que el broker sí manejaba). Si esos proveedores son necesarios en el futuro, habrá que añadir credenciales propias para cada uno de forma análoga al flujo de Google implementado aquí.
 - El editor de Lovable muestra callbacks propios del broker (`oauth.lovable.app/callback`, `<proyecto>.lovable.app/~oauth/callback`) en el panel de configuración de Google — son los que usa el broker para el editor/frontend de Lovable. Registrarlos también en Google Cloud Console evita romper el login en el editor de Lovable (útil para probar el backend) mientras la app real usa el callback de Supabase.
 
+### Sesión 18.09.26
+- El webhook de Stripe en Vercel debe apuntar siempre al dominio con `www` (`https://www.getaurafarmapp.com/...`), no al apex (`https://getaurafarmapp.com/...`), porque Vercel emite un 308 en el apex que Stripe no sigue — el webhook llega a 308 y marca el evento como fallido.
+- `SUPABASE_SERVICE_ROLE_KEY` sigue siendo inaccesible en Vercel (y en cualquier hosting externo a Lovable), pero las server functions del checkout (`stripe-checkout.functions.ts`) no la necesitan si se usa el cliente Supabase autenticado del usuario en lugar de `supabaseAdmin` — el cliente autenticado tiene los permisos correctos para leer/escribir la propia fila de `profiles` gracias a la política RLS `auth.uid() = id`.
+- Al activar Stripe Live, los `price_id` cambian completamente respecto al modo Test — son IDs distintos, no el mismo ID en dos entornos. Hay que actualizar `stripe.server.ts` con los IDs Live antes de cualquier pago real; los IDs Test siguen siendo válidos para el entorno Test de Stripe pero nunca para cobros reales.
+
 ---
 
 ## 📋 PRÓXIMA TAREA PRIORITARIA
-Verificar Google OAuth en producción (getaurafarmapp.com/auth) tras el deploy de Vercel del commit 791401c. Si funciona, pasar a prioridad 2: decidir el destino del webhook de Stripe (¿*.lovable.app o getaurafarmapp.com?). Después, corregir los warnings de RLS pendientes (posts, zonas, votos).
+Corregir los warnings de seguridad de RLS (posts/zonas/votos) via Lovable Cloud → Seguridad o SQL editor. Después: verificar Stripe Live end-to-end con pago real (tarjeta real) y confirmar actualización de `profiles.pass_active`/`multiplier`.
 
 ---
 
 ## 🔖 ÚLTIMO COMMIT
-fix: bypass Lovable OAuth broker, use native Supabase signInWithOAuth — 791401c
+fix: update Stripe price IDs to Live mode — ebb7aa0
