@@ -1,11 +1,67 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { createClient } from "@supabase/supabase-js";
 
-async function setPass(customerId: string, active: boolean, multiplier: number) {
-  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  await supabaseAdmin
-    .from("profiles")
-    .update({ pass_active: active, multiplier: active ? multiplier : 1 })
-    .eq("stripe_customer_id", customerId);
+function isNewSupabaseApiKey(value: string): boolean {
+  return value.startsWith("sb_publishable_") || value.startsWith("sb_secret_");
+}
+
+function createSupabaseFetch(supabaseKey: string): typeof fetch {
+  return (input, init) => {
+    const headers = new Headers(
+      typeof Request !== "undefined" && input instanceof Request ? input.headers : undefined,
+    );
+
+    if (init?.headers) {
+      new Headers(init.headers).forEach((value, key) => headers.set(key, value));
+    }
+
+    // Las claves nuevas de Supabase son cadenas opacas, no JWT bearer.
+    if (isNewSupabaseApiKey(supabaseKey) && headers.get("Authorization") === `Bearer ${supabaseKey}`) {
+      headers.delete("Authorization");
+    }
+
+    headers.set("apikey", supabaseKey);
+    return fetch(input, { ...init, headers });
+  };
+}
+
+function getRpcClient() {
+  const url = process.env["SUPABASE_URL"];
+  const key = process.env["SUPABASE_PUBLISHABLE_KEY"];
+
+  if (!url || !key) {
+    throw new Error("Missing SUPABASE_URL or SUPABASE_PUBLISHABLE_KEY");
+  }
+
+  return createClient(url, key, {
+    global: { fetch: createSupabaseFetch(key) },
+    auth: {
+      storage: undefined,
+      persistSession: false,
+      autoRefreshToken: false,
+    },
+  });
+}
+
+async function setPass(customerId: string, active: boolean, multiplier: number): Promise<void> {
+  const rpcSecret = process.env["STRIPE_RPC_SECRET"];
+  if (!rpcSecret) throw new Error("Missing STRIPE_RPC_SECRET");
+
+  const { data, error } = await getRpcClient().rpc("apply_stripe_pass", {
+    p_secret: rpcSecret,
+    p_customer_id: customerId,
+    p_active: active,
+    p_multiplier: multiplier,
+  });
+
+  if (error) {
+    throw new Error(`apply_stripe_pass failed: ${error.message}`);
+  }
+
+  const updatedRows = typeof data === "number" ? data : 0;
+  if (updatedRows === 0) {
+    console.error("[stripe-webhook] no profile matched stripe_customer_id", customerId);
+  }
 }
 
 export const Route = createFileRoute("/api/public/stripe-webhook")({
