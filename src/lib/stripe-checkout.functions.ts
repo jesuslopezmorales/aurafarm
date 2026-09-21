@@ -3,6 +3,13 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 type PlanId = "plus" | "master";
 
+const BLOCKING_STATUSES: ReadonlySet<string> = new Set([
+  "active",
+  "trialing",
+  "past_due",
+  "unpaid",
+]);
+
 export const createCheckoutSession = createServerFn({ method: "POST" })
   .validator((data: unknown): { planId: PlanId } => {
     const planId = (data as { planId?: unknown } | undefined)?.planId;
@@ -27,6 +34,17 @@ export const createCheckoutSession = createServerFn({ method: "POST" })
       .maybeSingle();
 
     let customerId = profile?.stripe_customer_id ?? null;
+
+    if (customerId) {
+      const existing = await stripe.subscriptions.list({
+        customer: customerId,
+        status: "all",
+        limit: 20,
+      });
+      if (existing.data.some((sub) => BLOCKING_STATUSES.has(sub.status))) {
+        throw new Error("ALREADY_SUBSCRIBED");
+      }
+    }
 
     if (!customerId) {
       const email = typeof claims.email === "string" ? claims.email : undefined;
