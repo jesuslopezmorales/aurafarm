@@ -1,5 +1,5 @@
 # AuraFarm — Session State
-_Última actualización: 18.09.26_
+_Última actualización: 21.09.26_
 
 ---
 
@@ -100,6 +100,16 @@ Adjuntar XML a Claude Chat antes de tocar código.
 - Bug de compatibilidad Windows encontrado y parcheado en `@lovable.dev/mcp-js`: la función `assertContains` en `node_modules/@lovable.dev/mcp-js/dist/stacks/tanstack/vite.js` comparaba rutas usando el separador nativo del SO sin normalizar barras, lo que la hacía fallar en Windows (rutas con `\`) aunque el propio archivo ya definía una función `normalizePath` sin usar para ese fin. Parcheado localmente haciendo que `assertContains` normalice ambas rutas con esa `normalizePath` ya existente antes de compararlas. Cambio NO versionado (vive dentro de `node_modules`) — hay que repetirlo manualmente cada vez que se borre `node_modules` y se reinstale desde cero en Windows.
 - Instalación de Claude Code CLI en local y login correcto.
 
+### Sesión 21.09.26
+- Verificado en producción: favicon en pestaña (/ y /auth), metatags og:image/twitter:image (URLs absolutas, charset utf-8 correcto), header con el logo real, Facebook Sharing Debugger OK (los avisos por og:url y fb:app_id no requieren acción; no se añade og:url en `__root.tsx` porque se heredaría en todas las rutas), "Añadir a pantalla de inicio" en Android con icono maskable y pantalla de arranque correctos.
+- Bloqueo resuelto: `icon-512-maskable.png` nunca se había commiteado (el manifest apuntaba a un 404). Regenerado desde `icon-512.png` (fondo #14111C a sangre, hexágono de 352 px de alto dentro de la zona segura), commit d5fd25f, verificado 200 image/png.
+- Stripe webhook (commit 442df8d): `src/routes/api/public/stripe-webhook.ts` ya no usa `supabaseAdmin` (`SUPABASE_SERVICE_ROLE_KEY` no existe en Vercel); llama a la RPC `apply_stripe_pass` (Postgres, `SECURITY DEFINER`, `EXECUTE` solo para `anon`, protegida con secreto compartido `STRIPE_RPC_SECRET` en Vercel Production). Un error de RPC devuelve 500 para que Stripe reintente; 0 filas afectadas se registra en logs y devuelve 200. Verificado: endpoint 400 sin firma, RPC devuelve 28000 unauthorized con secreto incorrecto, webhook Live con 6 eventos (checkout.session.completed, customer.subscription.created/updated/deleted, invoice.payment_failed/succeeded). IMPORTANTE: la función SQL se creó en el editor SQL de Lovable y NO está versionada en git.
+- Páginas legales (commit 3d1a6e9): `src/routes/privacidad.tsx`, `src/routes/terminos.tsx` (con política de desistimiento de 14 días y reembolso completo, cancelación al final del periodo), `src/components/LegalLayout.tsx`, `src/lib/legal-info.ts` (fuente única de datos del titular; `ownerTaxId` y `ownerAddress` en `null` por decisión de Jesús; contacto hello@getaurafarmapp.com, reportes reports@getaurafarmapp.com). `routeTree.gen.ts` se versiona y se regenera arrancando `npm run dev`. Textos redactados como base, pendientes de revisión de un gestor o abogado antes de cobrar.
+- Google OAuth: URLs de /privacidad y /terminos pegadas en la pantalla de marca (sin logotipo, a propósito: subirlo obliga a verificar la marca), sin permisos sensibles ni restringidos, app publicada en "En producción".
+- Datos: perfil e5724e27… (jlopezmorales@hotmail.com) reseteado por SQL a `pass_active=false`, `multiplier=1`, `stripe_customer_id=NULL`, `aura=400` conservado (residuo de pruebas en modo test). Cambio hecho en el editor SQL, no versionado.
+- Stripe portal de clientes Live: configuración guardada (`bpc_1UI7bxE832UCdFMQft5t9ZvA`), cancelación permitida al final del periodo con motivo, cambio de plan y de cantidad desactivados; URLs de privacidad y condiciones y correo de soporte hello@getaurafarmapp.com guardados en datos públicos de empresa. Aún no hay código que abra el portal (sin llamadas a `billingPortal` en el repo).
+- Guarda anti-doble-suscripción (commit d68e04b): `src/lib/stripe-checkout.functions.ts` consulta las suscripciones del cliente en Stripe y lanza `ALREADY_SUBSCRIBED` si hay una en estado `active`, `trialing`, `past_due` o `unpaid`. Deploy Ready en producción. Sin verificar todavía en producción que el checkout sigue redirigiendo a Stripe para un usuario sin suscripción.
+
 ---
 
 ## 🔴 PENDIENTES — Alta prioridad
@@ -120,6 +130,14 @@ Adjuntar XML a Claude Chat antes de tocar código.
 - Evaluar LOVABLE_DB_MIGRATION_URL (Enterprise).
 - Activar Stripe KYC completo (verificación de identidad para recibir pagos reales).
 - Empaquetado Android (Capacitor vs TWA), cuenta Google Play Developer, política de privacidad/términos.
+
+---
+
+## 🎨 Hallazgos pendientes de decisión (congelación estética)
+- La pantalla /auth sigue con el icono provisional Sparkles.
+- El footer de la app no enlaza a /privacidad ni a /terminos (Google lo pide si algún día se sube el logo).
+
+Ninguno se toca sin autorización explícita.
 
 ---
 
@@ -173,9 +191,14 @@ Adjuntar XML a Claude Chat antes de tocar código.
 ---
 
 ## 📋 PRÓXIMA TAREA PRIORITARIA
-Verificar en producción tras el deploy: favicon en pestaña del navegador, "Añadir a pantalla de inicio" en móvil (iconos correctos), header mostrando el logo real, og:image en Facebook Sharing Debugger / Twitter Card Validator (ojo con cache de scrapers). Crear y commitear `public/icon-512-maskable.png` (bloqueante para PWA). Después: verificar Stripe Live end-to-end con pago real.
+1. Sin pagar: con jesuslopezmorales@gmail.com en /aura-pass, pulsar "Activar Aura Pass" y comprobar que redirige a Stripe con el importe correcto (valida la guarda d68e04b).
+2. Gestión de suscripción por el usuario: crear `src/lib/stripe-portal.functions.ts` (`createPortalSession` con `billingPortal`) y botón "Gestionar suscripción" en `aura-pass.tsx` (cambio de UI: requiere autorización explícita por la congelación estética). Mostrar mensaje específico para `ALREADY_SUBSCRIBED` en lugar del genérico "No se pudo iniciar el pago".
+3. Versionar en el repo el SQL de `apply_stripe_pass` con marcador `REEMPLAZA_CON_EL_SECRETO` en lugar del secreto real.
+4. Flujo de reporte de contenido en la app (existe reports@getaurafarmapp.com, falta el flujo; también lo exige Google Play).
+5. Decidir si se muestran NIF y domicilio en las páginas legales (obligatorio al cobrar suscripciones) y revisar la dirección de soporte guardada en Stripe (es visible para clientes en recibos y portal). Consultar con un gestor la fiscalidad de las suscripciones.
+6. AL FINAL, obligatorio antes de abrir la app o cobrar: prueba de pago real de Aura Pass con jesuslopezmorales@gmail.com (perfil bd5cad45…): comprobar en el editor SQL que `pass_active=true` y `multiplier=2`, revisar que la recarga tras `?checkout=success` no llega antes que el webhook, cancelar la suscripción en Stripe (comprueba `customer.subscription.deleted` → `pass_active=false`) y reembolsar el pago.
 
 ---
 
 ## 🔖 ÚLTIMO COMMIT
-feat: replace placeholder Sparkles icon with real AuraFarm logo in header — 2c79b95
+fix(stripe): impedir doble suscripción si el cliente ya tiene una activa — d68e04b
