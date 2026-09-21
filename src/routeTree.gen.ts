@@ -15,6 +15,8 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as ConectarRouteImport } from './routes/conectar'
 import { Route as McpRouteImport } from './routes/mcp'
 import { Route as PerfilRouteImport } from './routes/perfil'
+import { Route as PrivacidadRouteImport } from './routes/privacidad'
+import { Route as TerminosRouteImport } from './routes/terminos'
 import { Route as ZonasRouteImport } from './routes/zonas'
 import { Route as Char91DotwellKnownChar93OauthProtectedResourceRouteImport } from './routes/[.well-known]/oauth-protected-resource'
 import { Route as DotlovableOauthConsentRouteImport } from './routes/[.]lovable.oauth.consent'
@@ -50,6 +52,16 @@ const PerfilRoute = PerfilRouteImport.update({
   path: '/perfil',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PrivacidadRoute = PrivacidadRouteImport.update({
+  id: '/privacidad',
+  path: '/privacidad',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TerminosRoute = TerminosRouteImport.update({
+  id: '/terminos',
+  path: '/terminos',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ZonasRoute = ZonasRouteImport.update({
   id: '/zonas',
   path: '/zonas',
@@ -79,6 +91,8 @@ export interface FileRoutesByFullPath {
   '/conectar': typeof ConectarRoute
   '/mcp': typeof McpRoute
   '/perfil': typeof PerfilRoute
+  '/privacidad': typeof PrivacidadRoute
+  '/terminos': typeof TerminosRoute
   '/zonas': typeof ZonasRoute
   '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
@@ -91,6 +105,8 @@ export interface FileRoutesByTo {
   '/conectar': typeof ConectarRoute
   '/mcp': typeof McpRoute
   '/perfil': typeof PerfilRoute
+  '/privacidad': typeof PrivacidadRoute
+  '/terminos': typeof TerminosRoute
   '/zonas': typeof ZonasRoute
   '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
@@ -104,6 +120,8 @@ export interface FileRoutesById {
   '/conectar': typeof ConectarRoute
   '/mcp': typeof McpRoute
   '/perfil': typeof PerfilRoute
+  '/privacidad': typeof PrivacidadRoute
+  '/terminos': typeof TerminosRoute
   '/zonas': typeof ZonasRoute
   '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
@@ -118,6 +136,8 @@ export interface FileRouteTypes {
     | '/conectar'
     | '/mcp'
     | '/perfil'
+    | '/privacidad'
+    | '/terminos'
     | '/zonas'
     | '/.well-known/oauth-protected-resource'
     | '/.lovable/oauth/consent'
@@ -130,6 +150,8 @@ export interface FileRouteTypes {
     | '/conectar'
     | '/mcp'
     | '/perfil'
+    | '/privacidad'
+    | '/terminos'
     | '/zonas'
     | '/.well-known/oauth-protected-resource'
     | '/.lovable/oauth/consent'
@@ -142,6 +164,8 @@ export interface FileRouteTypes {
     | '/conectar'
     | '/mcp'
     | '/perfil'
+    | '/privacidad'
+    | '/terminos'
     | '/zonas'
     | '/.well-known/oauth-protected-resource'
     | '/.lovable/oauth/consent'
@@ -155,6 +179,8 @@ export interface RootRouteChildren {
   ConectarRoute: typeof ConectarRoute
   McpRoute: typeof McpRoute
   PerfilRoute: typeof PerfilRoute
+  PrivacidadRoute: typeof PrivacidadRoute
+  TerminosRoute: typeof TerminosRoute
   ZonasRoute: typeof ZonasRoute
   Char91DotwellKnownChar93OauthProtectedResourceRoute: typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   DotlovableOauthConsentRoute: typeof DotlovableOauthConsentRoute
@@ -205,6 +231,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PerfilRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/privacidad': {
+      id: '/privacidad'
+      path: '/privacidad'
+      fullPath: '/privacidad'
+      preLoaderRoute: typeof PrivacidadRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/terminos': {
+      id: '/terminos'
+      path: '/terminos'
+      fullPath: '/terminos'
+      preLoaderRoute: typeof TerminosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/zonas': {
       id: '/zonas'
       path: '/zonas'
@@ -243,6 +283,8 @@ const rootRouteChildren: RootRouteChildren = {
   ConectarRoute: ConectarRoute,
   McpRoute: McpRoute,
   PerfilRoute: PerfilRoute,
+  PrivacidadRoute: PrivacidadRoute,
+  TerminosRoute: TerminosRoute,
   ZonasRoute: ZonasRoute,
   Char91DotwellKnownChar93OauthProtectedResourceRoute:
     Char91DotwellKnownChar93OauthProtectedResourceRoute,
