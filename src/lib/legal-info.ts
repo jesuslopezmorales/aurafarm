@@ -12,10 +12,10 @@ export interface LegalInfo {
 export const LEGAL: LegalInfo = {
   appName: "AuraFarm",
   siteUrl: "https://www.getaurafarmapp.com",
-  ownerName: "Jesús López",
-  ownerTaxId: null,
-  ownerAddress: null,
+  ownerName: "Jesús López Morales",
+  ownerTaxId: "53234969C",
+  ownerAddress: "Calle Leandro Gras Limiñana 16, 03670 Monforte del Cid, Alicante, España",
   contactEmail: "hello@getaurafarmapp.com",
   reportsEmail: "reports@getaurafarmapp.com",
-  lastUpdated: "21 de septiembre de 2026",
+  lastUpdated: "23 de septiembre de 2026",
 };

@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Sparkles } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -13,9 +13,16 @@ function safeNext(value: unknown): string {
   return value;
 }
 
+function safeRef(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim().toUpperCase();
+  if (!/^[A-Z0-9]{4,12}$/.test(trimmed)) return null;
+  return trimmed;
+}
+
 export const Route = createFileRoute("/auth")({
   ssr: false,
-  validateSearch: (s: Record<string, unknown>) => ({ next: safeNext(s['next']) }),
+  validateSearch: (s: Record<string, unknown>) => ({ next: safeNext(s['next']), ref: safeRef(s['ref']) }),
   head: () => ({
     meta: [
       { title: "Entrar en AuraFarm — tu cuenta de Aura" },
@@ -34,12 +41,18 @@ export const Route = createFileRoute("/auth")({
 });
 
 function AuthPage() {
-  const { next } = Route.useSearch();
+  const { next, ref } = Route.useSearch();
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [mode, setMode] = useState<"in" | "up">("in");
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (ref) {
+      window.localStorage.setItem("af_referral_code", ref);
+    }
+  }, [ref]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -67,7 +80,7 @@ function AuthPage() {
     toast.success("Cuenta creada. Revisa tu correo si te pedimos confirmarla.");
     const { data } = await supabase.auth.getSession();
     if (data.session) window.location.href = next;
-    else navigate({ to: "/auth", search: { next } });
+    else navigate({ to: "/auth", search: { next, ref: null } });
   }
 
   async function google() {

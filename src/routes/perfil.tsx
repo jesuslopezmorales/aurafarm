@@ -1,11 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Check, Crown, Flame, LogOut, Minus, Pencil, Plus, Target, TrendingUp, X } from "lucide-react";
-import { useState } from "react";
+import { Check, Copy, Crown, Flame, Gift, LogOut, Minus, Pencil, Plus, Share2, Target, TrendingUp, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
 
 import { AppShell } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
+import { supabase } from "@/integrations/supabase/client";
 import { rankFor, ranks, useAura } from "@/lib/aura-store";
 import { cn } from "@/lib/utils";
 
@@ -298,6 +300,8 @@ function ProfilePage() {
 
       <NewHabitForm />
 
+      {isAuthenticated && <ReferralSection />}
+
       {isAuthenticated && (
         <Button
           onClick={signOut}
@@ -308,6 +312,155 @@ function ProfilePage() {
         </Button>
       )}
     </AppShell>
+  );
+}
+
+/**
+ * get_or_create_referral_code() and get_my_referrals() are Postgres RPCs created directly
+ * via Lovable's SQL editor (drizzle/migrations/manual/0002_referral_system.sql and
+ * 0003_referral_status_rpc.sql), same reasoning as ToggleHabitClient in aura-store.tsx:
+ * absent from the auto-generated types.ts.
+ */
+type ReferralRpcClient = {
+  rpc: (
+    fn: "get_or_create_referral_code",
+    args?: Record<string, never>,
+  ) => PromiseLike<{ data: string | null; error: { message: string } | null }>;
+} & {
+  rpc: (
+    fn: "get_my_referrals",
+    args?: Record<string, never>,
+  ) => PromiseLike<{
+    data: { referred_display_name: string; status: string; rewarded_at: string | null }[] | null;
+    error: { message: string } | null;
+  }>;
+};
+
+type ReferralRow = { referred_display_name: string; status: string; rewarded_at: string | null };
+
+const REFERRAL_LIMIT = 1;
+
+function ReferralSection() {
+  const [code, setCode] = useState<string | null>(null);
+  const [referrals, setReferrals] = useState<ReferralRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const canNativeShare = typeof navigator.share === "function";
+
+  useEffect(() => {
+    let active = true;
+    async function load() {
+      const client = supabase as unknown as ReferralRpcClient;
+      const [codeRes, referralsRes] = await Promise.all([
+        client.rpc("get_or_create_referral_code"),
+        client.rpc("get_my_referrals"),
+      ]);
+      if (!active) return;
+      if (codeRes.error) {
+        console.error("[perfil] get_or_create_referral_code", codeRes.error.message);
+      } else {
+        setCode(codeRes.data);
+      }
+      if (referralsRes.error) {
+        console.error("[perfil] get_my_referrals", referralsRes.error.message);
+      } else {
+        setReferrals(referralsRes.data ?? []);
+      }
+      setLoading(false);
+    }
+    void load();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const rewardedCount = referrals.filter((r) => r.status === "rewarded").length;
+  const shareUrl = code ? `${window.location.origin}/auth?ref=${code}` : null;
+
+  async function share() {
+    if (!shareUrl) return;
+    if (canNativeShare) {
+      try {
+        await navigator.share({
+          title: "AuraFarm",
+          text: "Únete a AuraFarm con mi código y farmea Aura conmigo",
+          url: shareUrl,
+        });
+        return;
+      } catch {
+        // el usuario canceló el share nativo, no hacer nada
+        return;
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      toast.success("Enlace copiado");
+    } catch {
+      toast.error("No se pudo copiar el enlace");
+    }
+  }
+
+  return (
+    <section className="glass glow-electric relative mt-6 overflow-hidden rounded-3xl p-5">
+      <div className="absolute -top-12 -right-8 size-40 rounded-full bg-accent/20 blur-3xl" />
+      <p className="relative flex items-center gap-1.5 text-[11px] font-semibold tracking-widest text-accent uppercase">
+        <Gift className="size-3.5" /> Promociona
+      </p>
+      <h2 className="font-display relative mt-2 text-lg font-bold">
+        Invita a un amigo, gana Aura Pass gratis
+      </h2>
+      <p className="relative mt-1.5 text-xs text-muted-foreground">
+        Cuando tu amigo se registre con tu código y complete su primera acción, recibes un mes de
+        Aura Pass gratis (multiplicador x2). Máximo {REFERRAL_LIMIT} amigo.
+      </p>
+
+      {loading ? (
+        <p className="relative mt-4 text-xs text-muted-foreground">Cargando…</p>
+      ) : (
+        <>
+          <div className="relative mt-4 flex items-center gap-2">
+            <div className="flex-1 rounded-xl border border-border bg-secondary/50 px-3 py-2.5 text-center font-mono text-sm font-bold tracking-widest">
+              {code}
+            </div>
+            <Button
+              size="icon"
+              variant="secondary"
+              className="size-10 shrink-0 rounded-xl"
+              aria-label="Compartir código"
+              onClick={share}
+            >
+              {canNativeShare ? <Share2 className="size-4" /> : <Copy className="size-4" />}
+            </Button>
+          </div>
+
+          <p className="relative mt-3 text-xs font-semibold">
+            {rewardedCount}/{REFERRAL_LIMIT} amigos canjeados
+          </p>
+
+          {referrals.length > 0 && (
+            <ul className="relative mt-2 space-y-1.5">
+              {referrals.map((r, i) => (
+                <li
+                  key={i}
+                  className="flex items-center justify-between rounded-xl border border-border px-3 py-2 text-xs"
+                >
+                  <span>{r.referred_display_name}</span>
+                  <span
+                    className={cn(
+                      "rounded-full px-2 py-0.5 text-[10px] font-bold",
+                      r.status === "rewarded"
+                        ? "bg-primary/20 text-primary"
+                        : "bg-secondary text-muted-foreground",
+                    )}
+                  >
+                    {r.status === "rewarded" ? "Recompensado" : "Pendiente"}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
+      )}
+    </section>
   );
 }
 

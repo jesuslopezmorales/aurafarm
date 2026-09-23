@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useState, type ReactNode
 import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
+import { processReferralRewards } from "@/lib/process-referral-rewards.functions";
 import type { Tables } from "@/integrations/supabase/types";
 
 export type Vote = "real" | "cap" | null;
@@ -184,6 +185,7 @@ function localDayRangeIso(): { start: string; end: string } {
 
 const GUEST_DISPLAY_NAME = "Tú";
 const GUEST_HANDLE = "@tuaura";
+const REFERRAL_CODE_STORAGE_KEY = "af_referral_code";
 
 type ProfileRow = Tables<"profiles">;
 type HabitRow = Tables<"habits">;
@@ -216,6 +218,21 @@ type ToggleHabitClient = {
     args: { p_habit_id: string; p_done: boolean; p_logged_on: string },
   ) => PromiseLike<{
     data: { new_aura: number }[] | null;
+    error: { message: string } | null;
+  }>;
+};
+
+/**
+ * apply_referral_code(p_code text) is a Postgres RPC created directly via Lovable's SQL
+ * editor (drizzle/migrations/manual/0002_referral_system.sql), same reasoning as
+ * ToggleHabitClient above: it is absent from the auto-generated types.ts.
+ */
+type ApplyReferralCodeClient = {
+  rpc: (
+    fn: "apply_referral_code",
+    args: { p_code: string },
+  ) => PromiseLike<{
+    data: boolean | null;
     error: { message: string } | null;
   }>;
 };
@@ -300,6 +317,23 @@ export function AuraProvider({ children }: { children: ReactNode }) {
       setBio(profile.bio);
     }
 
+    function applyPendingReferralCode(profile: ProfileRow) {
+      const referredByCode = (profile as { referred_by_code?: string | null }).referred_by_code;
+      if (referredByCode) return;
+      const pendingCode =
+        typeof window !== "undefined" ? window.localStorage.getItem(REFERRAL_CODE_STORAGE_KEY) : null;
+      if (!pendingCode) return;
+      (supabase as unknown as ApplyReferralCodeClient)
+        .rpc("apply_referral_code", { p_code: pendingCode })
+        .then(({ error }) => {
+          if (error) {
+            console.error("[aura-store] apply_referral_code", error.message);
+            return;
+          }
+          window.localStorage.removeItem(REFERRAL_CODE_STORAGE_KEY);
+        });
+    }
+
     async function loadForUser(uid: string) {
       const existing = await supabase.from("profiles").select("*").eq("id", uid).maybeSingle();
       if (!active) return;
@@ -307,6 +341,7 @@ export function AuraProvider({ children }: { children: ReactNode }) {
         console.error("[aura-store] load profile", existing.error.message);
       } else if (existing.data) {
         applyProfile(existing.data);
+        applyPendingReferralCode(existing.data);
       } else {
         const created = await supabase.from("profiles").insert({ id: uid }).select("*").single();
         if (!active) return;
@@ -314,6 +349,7 @@ export function AuraProvider({ children }: { children: ReactNode }) {
           console.error("[aura-store] create profile", created.error.message);
         } else if (created.data) {
           applyProfile(created.data);
+          applyPendingReferralCode(created.data);
         }
       }
 
@@ -442,6 +478,12 @@ export function AuraProvider({ children }: { children: ReactNode }) {
             }
             const row = data?.[0];
             if (row) setAura(row.new_aura);
+
+            if (done) {
+              processReferralRewards({}).catch((err) => {
+                console.error("[aura-store] processReferralRewards", err);
+              });
+            }
           });
       },
       addPost: ({ action, detail, points, category }) => {

@@ -1,5 +1,5 @@
 # AuraFarm — Session State
-_Última actualización: 21.09.26_
+_Última actualización: 23.09.26_
 
 ---
 
@@ -110,17 +110,41 @@ Adjuntar XML a Claude Chat antes de tocar código.
 - Stripe portal de clientes Live: configuración guardada (`bpc_1UI7bxE832UCdFMQft5t9ZvA`), cancelación permitida al final del periodo con motivo, cambio de plan y de cantidad desactivados; URLs de privacidad y condiciones y correo de soporte hello@getaurafarmapp.com guardados en datos públicos de empresa. Aún no hay código que abra el portal (sin llamadas a `billingPortal` en el repo).
 - Guarda anti-doble-suscripción (commit d68e04b): `src/lib/stripe-checkout.functions.ts` consulta las suscripciones del cliente en Stripe y lanza `ALREADY_SUBSCRIBED` si hay una en estado `active`, `trialing`, `past_due` o `unpaid`. Deploy Ready en producción. Sin verificar todavía en producción que el checkout sigue redirigiendo a Stripe para un usuario sin suscripción.
 
+### Sesión 23.09.26 (novena sesión)
+- **PRIORIDAD 1 — Checkout sin pago: verificado en producción.** Con jesuslopezmorales@gmail.com en /aura-pass, "Activar Aura Pass" redirige a Stripe con el importe correcto (6,99€). Guarda anti-doble-suscripción del commit d68e04b funcionando (no se ofrece checkout duplicado a quien ya tiene suscripción activa).
+- **PRIORIDAD 2 — Portal de clientes Stripe: completado.** Nuevo `src/lib/stripe-portal.functions.ts` (`createPortalSession`, mismo patrón que `stripe-checkout.functions.ts`: cliente `supabase` autenticado del usuario, sin `supabaseAdmin`). Botón "Gestionar suscripción" añadido en `aura-pass.tsx`, visible solo si `multiplier > 1`. Mensaje de error específico para `ALREADY_SUBSCRIBED` en vez del genérico "No se pudo iniciar el pago". Verificación completa (redirección real al portal de Stripe) pendiente hasta tener una suscripción activa — coincide con el PUNTO 7.
+- **PRIORIDAD 3 — SQL de `apply_stripe_pass` versionado.** La función RPC solo existía en Lovable Cloud (creada por SQL editor, nunca en git — ver sesión 21.09.26). Versionada en `drizzle/migrations/manual/0001_apply_stripe_pass.sql` con `REEMPLAZA_CON_EL_SECRETO` como placeholder en vez del valor real de `STRIPE_RPC_SECRET`.
+- **HALLAZGO — Supabase Auth exige `127.0.0.1` en vez de `localhost` en Redirect URLs.** Añadido `http://127.0.0.1:8080/**` en Lovable Cloud → Users → Authentication settings. Para testear login local hay que acceder vía `http://127.0.0.1:8080`, no `localhost:8080` (con `localhost` el login falla silenciosamente al no matchear ningún Redirect URL permitido).
+- **PUNTO 5 — NIF y domicilio.** `legal-info.ts` actualizado: `ownerName` "Jesús López Morales", `ownerTaxId` "53234969C", `ownerAddress` "Calle Leandro Gras Limiñana 16, 03670 Monforte del Cid, Alicante, España" (antes `null` por decisión pendiente, ver sesión 21.09.26). Dirección de soporte ya guardada también en Stripe → Empresa → Datos de la cuenta. Fiscalidad de las suscripciones: sin gestor propio, se envió consulta a indieprof.com (info@indieprof.com) preguntando si gestionan suscripciones recurrentes vía Stripe y el régimen OSS de IVA — **pendiente de respuesta**.
+- **PUNTO 6 — Sistema de referidos: diseño e implementación completos.**
+  - Paso A (migración `drizzle/migrations/manual/0002_referral_system.sql`, ejecutada en Lovable Cloud): columnas `profiles.referral_code` / `referred_by_code` / `pass_expires_at`, tabla `referrals`, RPCs `get_or_create_referral_code` / `apply_referral_code` / `complete_referral_if_pending`. `toggle_habit` modificada para disparar la finalización del referido en el primer hábito marcado por el amigo referido.
+  - Paso B: captura de `?ref=` en `auth.tsx` (guardado en `localStorage`), aplicación automática vía `apply_referral_code` en `aura-store.tsx` al cargar el perfil.
+  - Paso C: sección "Promociona" en `perfil.tsx` — código propio, botón compartir (Web Share API con fallback a copiar al portapapeles), lista de amigos referidos con nombre y estado (vía RPC `get_my_referrals`, migración `drizzle/migrations/manual/0003_referral_status_rpc.sql`).
+  - Paso D: cupón Stripe 100% descuento (`duration: once`) para referidores que ya son suscriptores de pago cuando su amigo completa el referido. Migración `drizzle/migrations/manual/0004_referral_stripe_coupons.sql` (RPCs `get_pending_stripe_coupons` / `mark_referral_stripe_rewarded`, protegidas con `STRIPE_RPC_SECRET`). Nuevo server function `src/lib/process-referral-rewards.functions.ts`, llamado en fire-and-forget desde `aura-store.tsx` tras cada `toggle_habit` exitoso.
+  - Reglas de negocio: 1 recompensa máxima por referidor. Si el referidor es gratis → pass 2x gratis 30 días directo (`pass_expires_at`). Si ya paga → cupón Stripe 100% en el siguiente ciclo.
+  - **PENDIENTE: verificación end-to-end completa** (requiere un referidor con suscripción de pago real — coincide con el PUNTO 7).
+  - **LIMITACIÓN CONOCIDA sin blindar**: si el referidor tiene varias suscripciones o cambia de plan entre que se genera el `stripe_coupon_pending` y se procesa, el comportamiento no está cubierto (volumen bajo, aceptable por ahora).
+  - **LIMITACIÓN CONOCIDA sin implementar**: expiración automática de `pass_expires_at` — el pass gratis de 30 días no se revierte solo cuando caduca; falta lógica de comprobación/expiración, no implementada esta sesión.
+- **HALLAZGO CRÍTICO (persiste, no resuelto esta sesión)** — el feed de posts en `aura-store.tsx` sigue sin usar las tablas reales `aura_posts`/`post_votes` (existen en el esquema pero no se usan): `initialPosts` sigue siendo un array mock, `addPost` solo modifica estado local en memoria. Bloqueante antes de abrir la app a usuarios reales, independiente del PUNTO 4.
+- **PUNTO 4 — Flujo de reporte de contenido**: en pausa, bloqueado por el hallazgo del feed no persistido (no tiene sentido reportar posts que no viven en BD). Diseño ya decidido para cuando se retome: tabla `reports` (`reporter_id`, `entity_type='post'`, `entity_id`, `reason`, `details`, `status`), sin política SELECT para usuarios normales, solo revisión manual vía SQL editor.
+- **PUNTO 7 — Prueba de pago real**: sin empezar.
+- Hallazgos menores sin tocar (congelación estética, no urgente, sin cambios esta sesión): icono Sparkles provisional en `/auth`, footer sin enlaces a `/privacidad` y `/terminos`.
+
 ---
 
 ## 🔴 PENDIENTES — Alta prioridad
+- **Feed de posts no persistido** (`aura-store.tsx`): `initialPosts` sigue siendo mock, `addPost` solo modifica estado en memoria; las tablas reales `aura_posts`/`post_votes` existen pero no se usan. Bloqueante antes de abrir la app a usuarios reales.
+- PUNTO 7 — prueba de pago real de Aura Pass con jesuslopezmorales@gmail.com: sin empezar. Bloquea la verificación end-to-end del portal de clientes (PRIORIDAD 2) y del sistema de referidos (PUNTO 6).
 - Verificar en producción tras el deploy: favicon en pestaña del navegador, "Añadir a pantalla de inicio" en móvil (iconos correctos), header mostrando el logo real, og:image en Facebook Sharing Debugger / Twitter Card Validator (ojo con cache de scrapers sociales).
 - `public/icon-512-maskable.png`: referenciado en `manifest.webmanifest` (purpose: maskable) pero no existe en el repo — bloqueante antes de dar el logo por terminado y antes de que usuarios instalen la PWA en Android.
 
 ---
 
 ## 🟡 PENDIENTES — Media prioridad
+- PUNTO 4 — flujo de reporte de contenido: bloqueado por el feed no persistido (ver Alta prioridad). Diseño ya decidido: tabla `reports` (`reporter_id`, `entity_type='post'`, `entity_id`, `reason`, `details`, `status`), sin SELECT para usuarios normales, revisión manual vía SQL editor.
+- PUNTO 5 — fiscalidad de las suscripciones: consulta enviada a indieprof.com (info@indieprof.com) sobre gestión de suscripciones recurrentes vía Stripe y régimen OSS de IVA — pendiente de respuesta.
+- Sistema de referidos (PUNTO 6): verificación end-to-end pendiente (requiere un referidor con suscripción de pago real, coincide con PUNTO 7). Limitaciones conocidas sin blindar: cambios de suscripción entre generación y procesamiento del cupón Stripe pendiente; expiración automática de `pass_expires_at` no implementada.
 - Lost update en `aura-store.tsx`: `toggleHabit` escribe `profiles.aura` como valor absoluto calculado en cliente — pendiente mover a RPC atómica en Postgres para eliminar la condición de carrera con actualizaciones concurrentes del Aura desde otras fuentes.
-- Verificar Stripe Live de extremo a extremo con un pago real (tarjeta real) y confirmar que `profiles.pass_active` y `multiplier` se actualizan correctamente vía webhook.
 - Revisar/ampliar el límite de gasto de GitHub Codespaces si se quiere seguir usando antes del 01.10.26.
 
 ---
@@ -188,17 +212,20 @@ Ninguno se toca sin autorización explícita.
 - `SUPABASE_SERVICE_ROLE_KEY` sigue siendo inaccesible en Vercel (y en cualquier hosting externo a Lovable), pero las server functions del checkout (`stripe-checkout.functions.ts`) no la necesitan si se usa el cliente Supabase autenticado del usuario en lugar de `supabaseAdmin` — el cliente autenticado tiene los permisos correctos para leer/escribir la propia fila de `profiles` gracias a la política RLS `auth.uid() = id`.
 - Al activar Stripe Live, los `price_id` cambian completamente respecto al modo Test — son IDs distintos, no el mismo ID en dos entornos. Hay que actualizar `stripe.server.ts` con los IDs Live antes de cualquier pago real; los IDs Test siguen siendo válidos para el entorno Test de Stripe pero nunca para cobros reales.
 
+### Sesión 23.09.26
+- Supabase Auth (GoTrue) valida los Redirect URLs contra `127.0.0.1`, no contra `localhost`, aunque ambos apunten al mismo servidor de desarrollo — con `localhost:8080` el login falla sin matchear ningún Redirect URL permitido aunque `http://localhost:8080/**` no esté ni siquiera en la lista, y sin un error explícito que lo delate como problema de Redirect URL. Para testear login local siempre usar `http://127.0.0.1:8080` y tener esa URL (no `localhost`) dada de alta en Lovable Cloud → Users → Authentication settings.
+
 ---
 
 ## 📋 PRÓXIMA TAREA PRIORITARIA
-1. Sin pagar: con jesuslopezmorales@gmail.com en /aura-pass, pulsar "Activar Aura Pass" y comprobar que redirige a Stripe con el importe correcto (valida la guarda d68e04b).
-2. Gestión de suscripción por el usuario: crear `src/lib/stripe-portal.functions.ts` (`createPortalSession` con `billingPortal`) y botón "Gestionar suscripción" en `aura-pass.tsx` (cambio de UI: requiere autorización explícita por la congelación estética). Mostrar mensaje específico para `ALREADY_SUBSCRIBED` en lugar del genérico "No se pudo iniciar el pago".
-3. Versionar en el repo el SQL de `apply_stripe_pass` con marcador `REEMPLAZA_CON_EL_SECRETO` en lugar del secreto real.
-4. Flujo de reporte de contenido en la app (existe reports@getaurafarmapp.com, falta el flujo; también lo exige Google Play).
-5. Decidir si se muestran NIF y domicilio en las páginas legales (obligatorio al cobrar suscripciones) y revisar la dirección de soporte guardada en Stripe (es visible para clientes en recibos y portal). Consultar con un gestor la fiscalidad de las suscripciones.
-6. AL FINAL, obligatorio antes de abrir la app o cobrar: prueba de pago real de Aura Pass con jesuslopezmorales@gmail.com (perfil bd5cad45…): comprobar en el editor SQL que `pass_active=true` y `multiplier=2`, revisar que la recarga tras `?checkout=success` no llega antes que el webhook, cancelar la suscripción en Stripe (comprueba `customer.subscription.deleted` → `pass_active=false`) y reembolsar el pago.
+1. **Feed de posts no persistido** (hallazgo crítico, bloqueante antes de usuarios reales): migrar `aura-store.tsx` para leer/escribir `aura_posts`/`post_votes` reales en vez del array mock `initialPosts` y del `addPost` solo-en-memoria.
+2. Punto 7, obligatorio antes de abrir la app o cobrar: prueba de pago real de Aura Pass con jesuslopezmorales@gmail.com (perfil bd5cad45…): comprobar en el editor SQL que `pass_active=true` y `multiplier=2`, revisar que la recarga tras `?checkout=success` no llega antes que el webhook, verificar el portal de clientes (PRIORIDAD 2, 23.09.26) redirige y funciona, cancelar la suscripción en Stripe (comprueba `customer.subscription.deleted` → `pass_active=false`) y reembolsar el pago.
+3. Con una suscripción de pago activa de prueba, verificar de extremo a extremo el sistema de referidos (PUNTO 6, 23.09.26): cupón Stripe 100% al completar un referido siendo suscriptor de pago.
+4. Retomar el flujo de reporte de contenido (PUNTO 4) una vez resuelto el punto 1 de esta lista — diseño ya decidido, ver sesión 23.09.26.
+5. Fiscalidad de las suscripciones: esperar respuesta de indieprof.com (info@indieprof.com) y aplicar sus recomendaciones (régimen OSS de IVA, gestión de recurrencia Stripe).
 
 ---
 
 ## 🔖 ÚLTIMO COMMIT
-fix(stripe): impedir doble suscripción si el cliente ya tiene una activa — d68e04b
+docs: cierre de sesion 21.09.26 - verificacion branding, webhook via RPC, paginas legales, OAuth en produccion, portal Stripe y guarda anti-doble-suscripcion — fc33c78
+(Trabajo de la sesión 23.09.26 — portal de clientes, migración `apply_stripe_pass`, sistema de referidos — pendiente de commitear; ver `git status`.)

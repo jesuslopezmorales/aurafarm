@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
 import { createCheckoutSession } from "@/lib/stripe-checkout.functions";
+import { createPortalSession } from "@/lib/stripe-portal.functions";
 import { useAura } from "@/lib/aura-store";
 import { cn } from "@/lib/utils";
 
@@ -77,6 +78,9 @@ function PassPage() {
   const { aura, multiplier } = useAura();
   const [selected, setSelected] = useState("plus");
   const [subscribing, setSubscribing] = useState(false);
+  const [managing, setManaging] = useState(false);
+
+  const isSubscribed = multiplier > 1;
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -111,8 +115,30 @@ function PassPage() {
       }
     } catch (err) {
       console.error("[aura-pass] createCheckoutSession", err);
-      toast.error("No se pudo iniciar el pago");
+      const message = err instanceof Error ? err.message : "";
+      if (message.includes("ALREADY_SUBSCRIBED")) {
+        toast.error("Ya tienes una suscripción activa. Gestiónala desde \"Gestionar suscripción\".");
+      } else {
+        toast.error("No se pudo iniciar el pago");
+      }
       setSubscribing(false);
+    }
+  }
+
+  async function handleManageSubscription() {
+    setManaging(true);
+    try {
+      const { url } = await createPortalSession({});
+      if (url) {
+        window.location.href = url;
+      } else {
+        toast.error("No se pudo abrir el panel de suscripción");
+        setManaging(false);
+      }
+    } catch (err) {
+      console.error("[aura-pass] createPortalSession", err);
+      toast.error("No se pudo abrir el panel de suscripción");
+      setManaging(false);
     }
   }
 
@@ -179,6 +205,17 @@ function PassPage() {
           ? "Redirigiendo a pago…"
           : `Activar ${plans.find((p) => p.id === selected)!.name}`}
       </Button>
+
+      {isSubscribed && (
+        <Button
+          variant="secondary"
+          className="mt-2.5 h-11 w-full rounded-2xl text-sm font-bold"
+          onClick={handleManageSubscription}
+          disabled={managing}
+        >
+          {managing ? "Abriendo panel…" : "Gestionar suscripción"}
+        </Button>
+      )}
 
       <h2 className="font-display mt-7 mb-3 text-sm font-semibold">Tienda de recompensas</h2>
       <div className="grid grid-cols-2 gap-3">
