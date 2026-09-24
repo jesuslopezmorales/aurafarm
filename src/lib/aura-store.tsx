@@ -76,6 +76,10 @@ const POSITIVE_GRADIENT = "from-primary/40 via-accent/25 to-transparent";
 const NEGATIVE_GRADIENT = "from-destructive/35 via-primary/10 to-transparent";
 const FEED_LIMIT = 50;
 
+/** Valores de demostración: solo se aplican cuando se confirma que no hay sesión. */
+const GUEST_AURA = 8420;
+const GUEST_STREAK = 37;
+
 /** Posts de demostración: solo se muestran a visitantes sin sesión. */
 const initialPosts: AuraPost[] = [
   {
@@ -401,16 +405,18 @@ type Store = {
 const AuraContext = createContext<Store | null>(null);
 
 export function AuraProvider({ children }: { children: ReactNode }) {
-  const [aura, setAura] = useState(8420);
-  const [streak, setStreak] = useState(37);
+  // Estado inicial neutro: los datos de demostración solo se aplican en resetToGuestDefaults,
+  // una vez confirmado que no hay sesión, para evitar el parpadeo de datos de ejemplo.
+  const [aura, setAura] = useState(0);
+  const [streak, setStreak] = useState(0);
   const [multiplier, setMultiplier] = useState(1);
   const [passActive, setPassActive] = useState(false);
   const [displayName, setDisplayName] = useState(GUEST_DISPLAY_NAME);
   const [handle, setHandle] = useState(GUEST_HANDLE);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [bio, setBio] = useState<string | null>(null);
-  const [posts, setPosts] = useState<AuraPost[]>(initialPosts);
-  const [habits, setHabits] = useState(initialHabits);
+  const [posts, setPosts] = useState<AuraPost[]>([]);
+  const [habits, setHabits] = useState<Habit[]>([]);
   const [zones, setZones] = useState<AuraZone[]>([]);
   const [checkedInZoneIds, setCheckedInZoneIds] = useState<Set<string>>(new Set());
   const [userId, setUserId] = useState<string | null>(null);
@@ -525,8 +531,8 @@ export function AuraProvider({ children }: { children: ReactNode }) {
 
     function resetToGuestDefaults() {
       if (!active) return;
-      setAura(8420);
-      setStreak(37);
+      setAura(GUEST_AURA);
+      setStreak(GUEST_STREAK);
       setMultiplier(1);
       setPassActive(false);
       setDisplayName(GUEST_DISPLAY_NAME);
