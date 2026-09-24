@@ -1,4 +1,12 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
@@ -21,6 +29,7 @@ export type AuraPost = {
   votesReal: number;
   votesCap: number;
   myVote: Vote;
+  isMine: boolean;
 };
 
 export type Habit = {
@@ -63,6 +72,11 @@ function haversineKm(a: { lat: number; lng: number }, b: { lat: number; lng: num
   return 2 * R * Math.asin(Math.sqrt(h));
 }
 
+const POSITIVE_GRADIENT = "from-primary/40 via-accent/25 to-transparent";
+const NEGATIVE_GRADIENT = "from-destructive/35 via-primary/10 to-transparent";
+const FEED_LIMIT = 50;
+
+/** Posts de demostración: solo se muestran a visitantes sin sesión. */
 const initialPosts: AuraPost[] = [
   {
     id: "p1",
@@ -74,10 +88,11 @@ const initialPosts: AuraPost[] = [
     detail: "Nadie me vio salir de casa. La disciplina se cocina en silencio.",
     points: 240,
     category: "Disciplina",
-    gradient: "from-primary/40 via-accent/25 to-transparent",
+    gradient: POSITIVE_GRADIENT,
     votesReal: 182,
     votesCap: 14,
     myVote: null,
+    isMine: false,
   },
   {
     id: "p2",
@@ -89,10 +104,11 @@ const initialPosts: AuraPost[] = [
     detail: "Confesión honesta. Me quito el Aura yo mismo antes de que lo hagan otros.",
     points: -160,
     category: "Desliz",
-    gradient: "from-destructive/35 via-primary/10 to-transparent",
+    gradient: NEGATIVE_GRADIENT,
     votesReal: 341,
     votesCap: 6,
     myVote: null,
+    isMine: false,
   },
   {
     id: "p3",
@@ -108,6 +124,7 @@ const initialPosts: AuraPost[] = [
     votesReal: 903,
     votesCap: 41,
     myVote: null,
+    isMine: false,
   },
   {
     id: "p4",
@@ -123,6 +140,7 @@ const initialPosts: AuraPost[] = [
     votesReal: 512,
     votesCap: 88,
     myVote: null,
+    isMine: false,
   },
 ];
 
@@ -183,6 +201,44 @@ function localDayRangeIso(): { start: string; end: string } {
   return { start: start.toISOString(), end: end.toISOString() };
 }
 
+/** Tiempo relativo en español a partir de un timestamp ISO. */
+function relativeTime(iso: string): string {
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const minutes = Math.max(0, Math.floor(diffMs / 60000));
+  if (minutes < 1) return "ahora";
+  if (minutes < 60) return `hace ${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `hace ${hours} h`;
+  const days = Math.floor(hours / 24);
+  return `hace ${days} d`;
+}
+
+function toVote(value: string | null): Vote {
+  return value === "real" || value === "cap" ? value : null;
+}
+
+/** Aplica localmente un cambio de voto ajustando contadores. */
+function withVote(post: AuraPost, next: Vote): AuraPost {
+  const was = post.myVote;
+  const delta = (kind: Exclude<Vote, null>) => (next === kind ? 1 : 0) - (was === kind ? 1 : 0);
+  return {
+    ...post,
+    myVote: next,
+    votesReal: post.votesReal + delta("real"),
+    votesCap: post.votesCap + delta("cap"),
+  };
+}
+
+function createPostErrorMessage(message: string): string {
+  if (message.includes("daily_limit_reached")) {
+    return "Límite de 3 pruebas diarias alcanzado. Aura Pass las desbloquea sin límite.";
+  }
+  if (message.includes("invalid_action")) return "La acción debe tener entre 1 y 140 caracteres";
+  if (message.includes("invalid_detail")) return "El contexto no puede superar 280 caracteres";
+  if (message.includes("invalid_category")) return "Categoría no válida";
+  return "No se pudo publicar la prueba";
+}
+
 const GUEST_DISPLAY_NAME = "Tú";
 const GUEST_HANDLE = "@tuaura";
 const REFERRAL_CODE_STORAGE_KEY = "af_referral_code";
@@ -237,7 +293,84 @@ type ApplyReferralCodeClient = {
   }>;
 };
 
+/**
+ * get_feed / create_post / set_post_vote are Postgres RPCs created via Lovable's SQL editor
+ * (drizzle/migrations/manual/0005_feed_persistence.sql); absent from the generated types.ts.
+ */
+type FeedRow = {
+  id: string;
+  user_id: string;
+  author_name: string;
+  author_handle: string;
+  author_aura: number;
+  action: string;
+  detail: string;
+  points: number;
+  category: string;
+  created_at: string;
+  votes_real: number;
+  votes_cap: number;
+  my_vote: string | null;
+};
+
+type CreatePostRow = {
+  post_id: string;
+  applied_points: number;
+  new_aura: number;
+};
+
+type VoteRow = {
+  votes_real: number;
+  votes_cap: number;
+  my_vote: string | null;
+};
+
+type RpcResult<T> = PromiseLike<{
+  data: T[] | null;
+  error: { message: string } | null;
+}>;
+
+type FeedRpcClient = {
+  rpc(fn: "get_feed", args: { p_limit: number }): RpcResult<FeedRow>;
+  rpc(
+    fn: "create_post",
+    args: { p_action: string; p_detail: string; p_category: string },
+  ): RpcResult<CreatePostRow>;
+  rpc(
+    fn: "set_post_vote",
+    args: { p_post_id: string; p_vote: Exclude<Vote, null> | null },
+  ): RpcResult<VoteRow>;
+};
+
+const feedRpc = (): FeedRpcClient => supabase as unknown as FeedRpcClient;
+
+function postFromRow(row: FeedRow, currentUserId: string): AuraPost {
+  const handle = row.author_handle ? `@${row.author_handle.replace(/^@/, "")}` : GUEST_HANDLE;
+  return {
+    id: row.id,
+    user: row.author_name,
+    handle,
+    rank: rankFor(row.author_aura).name,
+    time: relativeTime(row.created_at),
+    action: row.action,
+    detail: row.detail,
+    points: row.points,
+    category: row.category,
+    gradient: row.points >= 0 ? POSITIVE_GRADIENT : NEGATIVE_GRADIENT,
+    votesReal: row.votes_real,
+    votesCap: row.votes_cap,
+    myVote: toVote(row.my_vote),
+    isMine: row.user_id === currentUserId,
+  };
+}
+
 export type GeoCoords = { latitude: number; longitude: number };
+
+export type AddPostInput = {
+  action: string;
+  detail: string;
+  category: string;
+};
 
 type Store = {
   aura: number;
@@ -254,7 +387,7 @@ type Store = {
   passActive: boolean;
   vote: (postId: string, vote: Exclude<Vote, null>) => void;
   toggleHabit: (habitId: string) => void;
-  addPost: (input: { action: string; detail: string; points: number; category: string }) => void;
+  addPost: (input: AddPostInput) => Promise<boolean>;
   activatePass: (multiplier: number) => void;
   addHabit: (input: { name: string; points: number; kind: "habit" | "slip" }) => void;
   updateDisplayName: (name: string) => void;
@@ -276,11 +409,20 @@ export function AuraProvider({ children }: { children: ReactNode }) {
   const [handle, setHandle] = useState(GUEST_HANDLE);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [bio, setBio] = useState<string | null>(null);
-  const [posts, setPosts] = useState(initialPosts);
+  const [posts, setPosts] = useState<AuraPost[]>(initialPosts);
   const [habits, setHabits] = useState(initialHabits);
   const [zones, setZones] = useState<AuraZone[]>([]);
   const [checkedInZoneIds, setCheckedInZoneIds] = useState<Set<string>>(new Set());
   const [userId, setUserId] = useState<string | null>(null);
+
+  const loadFeed = useCallback(async (uid: string): Promise<void> => {
+    const { data, error } = await feedRpc().rpc("get_feed", { p_limit: FEED_LIMIT });
+    if (error) {
+      console.error("[aura-store] load feed", error.message);
+      return;
+    }
+    setPosts((data ?? []).map((row) => postFromRow(row, uid)));
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -335,6 +477,8 @@ export function AuraProvider({ children }: { children: ReactNode }) {
     }
 
     async function loadForUser(uid: string) {
+      void loadFeed(uid);
+
       const existing = await supabase.from("profiles").select("*").eq("id", uid).maybeSingle();
       if (!active) return;
       if (existing.error) {
@@ -389,6 +533,7 @@ export function AuraProvider({ children }: { children: ReactNode }) {
       setHandle(GUEST_HANDLE);
       setAvatarUrl(null);
       setBio(null);
+      setPosts(initialPosts);
       setHabits(initialHabits);
       setCheckedInZoneIds(new Set());
     }
@@ -417,7 +562,7 @@ export function AuraProvider({ children }: { children: ReactNode }) {
       active = false;
       sub.subscription.unsubscribe();
     };
-  }, []);
+  }, [loadFeed]);
 
   const value = useMemo<Store>(
     () => ({
@@ -434,22 +579,49 @@ export function AuraProvider({ children }: { children: ReactNode }) {
       zones,
       checkedInZoneIds,
       isAuthenticated: userId !== null,
-      vote: (postId, vote) =>
-        setPosts((prev) =>
-          prev.map((p) => {
-            if (p.id !== postId) return p;
-            const was = p.myVote;
-            const next = was === vote ? null : vote;
-            const delta = (kind: Exclude<Vote, null>) =>
-              (next === kind ? 1 : 0) - (was === kind ? 1 : 0);
-            return {
-              ...p,
-              myVote: next,
-              votesReal: p.votesReal + delta("real"),
-              votesCap: p.votesCap + delta("cap"),
-            };
-          }),
-        ),
+      vote: (postId, choice) => {
+        const target = posts.find((p) => p.id === postId);
+        if (!target) return;
+        const next: Vote = target.myVote === choice ? null : choice;
+
+        if (!userId) {
+          setPosts((prev) => prev.map((p) => (p.id === postId ? withVote(p, next) : p)));
+          return;
+        }
+
+        if (target.isMine) {
+          toast.info("No puedes votar tu propia prueba");
+          return;
+        }
+
+        const snapshot = target;
+        setPosts((prev) => prev.map((p) => (p.id === postId ? withVote(p, next) : p)));
+
+        feedRpc()
+          .rpc("set_post_vote", { p_post_id: postId, p_vote: next })
+          .then(({ data, error }) => {
+            if (error) {
+              console.error("[aura-store] set_post_vote", error.message);
+              toast.error("No se pudo registrar el voto");
+              setPosts((prev) => prev.map((p) => (p.id === postId ? snapshot : p)));
+              return;
+            }
+            const row = data?.[0];
+            if (!row) return;
+            setPosts((prev) =>
+              prev.map((p) =>
+                p.id === postId
+                  ? {
+                      ...p,
+                      votesReal: row.votes_real,
+                      votesCap: row.votes_cap,
+                      myVote: toVote(row.my_vote),
+                    }
+                  : p,
+              ),
+            );
+          });
+      },
       toggleHabit: (habitId) => {
         const target = habits.find((h) => h.id === habitId);
         if (!target) return;
@@ -486,31 +658,36 @@ export function AuraProvider({ children }: { children: ReactNode }) {
             }
           });
       },
-      addPost: ({ action, detail, points, category }) => {
-        const gain = Math.round(points * multiplier);
-        setPosts((prev) => [
-          {
-            id: `p${Date.now()}`,
-            user: displayName,
-            handle,
-            rank: rankFor(aura).name,
-            time: "ahora",
-            action,
-            detail,
-            points: gain,
-            category,
-            gradient:
-              gain >= 0
-                ? "from-primary/40 via-accent/25 to-transparent"
-                : "from-destructive/35 via-primary/10 to-transparent",
-            votesReal: 0,
-            votesCap: 0,
-            myVote: null,
-          },
-          ...prev,
-        ]);
-        setAura((a) => Math.max(0, a + gain));
-        if (gain > 0) setStreak((s) => s + 1);
+      addPost: async ({ action, detail, category }) => {
+        if (!userId) {
+          toast.error("Inicia sesión para publicar una prueba");
+          return false;
+        }
+
+        const { data, error } = await feedRpc().rpc("create_post", {
+          p_action: action,
+          p_detail: detail,
+          p_category: category,
+        });
+
+        if (error) {
+          console.error("[aura-store] create_post", error.message);
+          toast.error(createPostErrorMessage(error.message));
+          return false;
+        }
+
+        const row = data?.[0];
+        if (row) {
+          setAura(row.new_aura);
+          toast.success(
+            row.applied_points >= 0
+              ? `+${row.applied_points} Aura en camino`
+              : `${row.applied_points} Aura, respeto por la honestidad`,
+          );
+        }
+
+        await loadFeed(userId);
+        return true;
       },
       activatePass: (m) => {
         setMultiplier(m);
@@ -674,6 +851,7 @@ export function AuraProvider({ children }: { children: ReactNode }) {
       zones,
       checkedInZoneIds,
       userId,
+      loadFeed,
     ],
   );
 

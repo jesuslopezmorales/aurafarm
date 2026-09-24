@@ -1,7 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Camera, Check, Flame, ShieldCheck, ThumbsDown, TrendingDown, Zap } from "lucide-react";
 import { useState } from "react";
-import { toast } from "sonner";
 
 import { AppShell } from "@/components/AppShell";
 import { Badge } from "@/components/ui/badge";
@@ -43,15 +42,26 @@ export const Route = createFileRoute("/")({
 const filters = ["Todo", "Disciplina", "Coraje", "Karma", "Desliz"];
 
 function FeedPage() {
-  const { posts, vote, addPost, multiplier } = useAura();
+  const { posts, vote, addPost } = useAura();
   const [filter, setFilter] = useState("Todo");
   const [open, setOpen] = useState(false);
   const [action, setAction] = useState("");
   const [detail, setDetail] = useState("");
   const [category, setCategory] = useState("Disciplina");
-  const [points, setPoints] = useState(120);
+  const [publishing, setPublishing] = useState(false);
 
   const visible = filter === "Todo" ? posts : posts.filter((p) => p.category === filter);
+
+  async function handlePublish() {
+    if (publishing) return;
+    setPublishing(true);
+    const ok = await addPost({ action: action.trim(), detail: detail.trim(), category });
+    setPublishing(false);
+    if (!ok) return;
+    setAction("");
+    setDetail("");
+    setOpen(false);
+  }
 
   return (
     <AppShell title="Prueba de Aura">
@@ -108,10 +118,7 @@ function FeedPage() {
               {["Disciplina", "Coraje", "Karma", "Desliz"].map((c) => (
                 <button
                   key={c}
-                  onClick={() => {
-                    setCategory(c);
-                    setPoints(c === "Desliz" ? -120 : 120);
-                  }}
+                  onClick={() => setCategory(c)}
                   className={cn(
                     "flex-1 rounded-xl border px-2 py-2 text-[11px] font-semibold",
                     category === c
@@ -127,17 +134,9 @@ function FeedPage() {
           <DialogFooter>
             <Button
               className="h-11 w-full rounded-2xl bg-gradient-to-r from-primary to-accent font-bold"
-              disabled={!action.trim()}
+              disabled={!action.trim() || publishing}
               onClick={() => {
-                addPost({ action: action.trim(), detail: detail.trim(), points, category });
-                toast.success(
-                  points >= 0
-                    ? `+${Math.round(points * multiplier)} Aura en camino`
-                    : `${Math.round(points * multiplier)} Aura, respeto por la honestidad`,
-                );
-                setAction("");
-                setDetail("");
-                setOpen(false);
+                void handlePublish();
               }}
             >
               Publicar prueba
