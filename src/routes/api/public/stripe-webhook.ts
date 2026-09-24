@@ -1,6 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { createClient } from "@supabase/supabase-js";
 
+const RPC_MAX_ATTEMPTS = 3;
+const RPC_RETRY_BASE_DELAY_MS = 750;
+
 function isNewSupabaseApiKey(value: string): boolean {
   return value.startsWith("sb_publishable_") || value.startsWith("sb_secret_");
 }
@@ -43,25 +46,60 @@ function getRpcClient() {
   });
 }
 
+// Errores transitorios de la pasarela de Supabase: el JWT interno generado a partir
+// de la clave opaca puede llegar con iat adelantado por desfase de reloj.
+function isTransientRpcError(message: string): boolean {
+  const normalized = message.toLowerCase();
+  return (
+    normalized.includes("jwt issued at future") ||
+    normalized.includes("fetch failed") ||
+    normalized.includes("network")
+  );
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function setPass(customerId: string, active: boolean, multiplier: number): Promise<void> {
   const rpcSecret = process.env["STRIPE_RPC_SECRET"];
   if (!rpcSecret) throw new Error("Missing STRIPE_RPC_SECRET");
 
-  const { data, error } = await getRpcClient().rpc("apply_stripe_pass", {
-    p_secret: rpcSecret,
-    p_customer_id: customerId,
-    p_active: active,
-    p_multiplier: multiplier,
-  });
+  const client = getRpcClient();
+  let lastMessage = "unknown error";
 
-  if (error) {
-    throw new Error(`apply_stripe_pass failed: ${error.message}`);
+  for (let attempt = 1; attempt <= RPC_MAX_ATTEMPTS; attempt++) {
+    const { data, error } = await client.rpc("apply_stripe_pass", {
+      p_secret: rpcSecret,
+      p_customer_id: customerId,
+      p_active: active,
+      p_multiplier: multiplier,
+    });
+
+    if (!error) {
+      const updatedRows = typeof data === "number" ? data : 0;
+      if (updatedRows === 0) {
+        console.error("[stripe-webhook] no profile matched stripe_customer_id", customerId);
+      }
+      if (attempt > 1) {
+        console.warn(`[stripe-webhook] apply_stripe_pass succeeded on attempt ${attempt}`);
+      }
+      return;
+    }
+
+    lastMessage = error.message;
+
+    if (!isTransientRpcError(error.message) || attempt === RPC_MAX_ATTEMPTS) {
+      break;
+    }
+
+    console.warn(
+      `[stripe-webhook] apply_stripe_pass transient error (attempt ${attempt}/${RPC_MAX_ATTEMPTS}): ${error.message}`,
+    );
+    await sleep(RPC_RETRY_BASE_DELAY_MS * attempt);
   }
 
-  const updatedRows = typeof data === "number" ? data : 0;
-  if (updatedRows === 0) {
-    console.error("[stripe-webhook] no profile matched stripe_customer_id", customerId);
-  }
+  throw new Error(`apply_stripe_pass failed: ${lastMessage}`);
 }
 
 export const Route = createFileRoute("/api/public/stripe-webhook")({
