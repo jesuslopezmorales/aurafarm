@@ -1,5 +1,5 @@
 # AuraFarm — Session State
-_Última actualización: 23.09.26_
+_Última actualización: 24.09.26_
 
 ---
 
@@ -130,21 +130,37 @@ Adjuntar XML a Claude Chat antes de tocar código.
 - **PUNTO 7 — Prueba de pago real**: sin empezar.
 - Hallazgos menores sin tocar (congelación estética, no urgente, sin cambios esta sesión): icono Sparkles provisional en `/auth`, footer sin enlaces a `/privacidad` y `/terminos`.
 
+### Sesión 24.09.26 (décima sesión)
+- **PUNTO 7 — Pago real de Aura Pass: completado y verificado en producción.** Con jesuslopezmorales@gmail.com (perfil `bd5cad45-2dc2-4580-9e33-18eade3d038c`, `cus_VHWIV9HkDCws2F`): el checkout Live reutiliza el customer existente, el webhook responde OK, `profiles.pass_active=true` y `multiplier=2` confirmados en BD, sin carrera entre el redirect `?checkout=success` y el webhook. Portal de clientes funcional (`return_url` a `/aura-pass`). Suscripción `sub_1UJ950E832UCdFMQPVg5BNZx` cancelada inmediatamente desde el Dashboard con reembolso de 6,99€; `customer.subscription.deleted` entregado con 200 y el perfil vuelto a `pass_active=false`, `multiplier=1` (`apply_stripe_pass` fuerza `multiplier=1` al desactivar).
+- Portal de clientes Stripe confirmado en Live: configuración `bpc_1UI7bxE832UCdFMQft5t9ZvA` con métodos de pago y cancelación activos, modo "al final del periodo".
+- **PUNTO 6 — Sistema de referidos: verificado end-to-end.** Enlace `https://www.getaurafarmapp.com/auth?ref=F7129FD` → registro de cuenta de prueba `jesuslopezmorales+ref1@gmail.com` (perfil `07a62b55-c319-4d6b-9e2e-343d71bd8dbb`, `referred_by_code=F7129FD`, el ref sobrevive a la confirmación por email) → primer hábito marcado → cupón Stripe `EvNBdrwu` (100%, once, `max_redemptions=1`) aplicado a la suscripción del referidor; fila `referrals` con `status=rewarded`, `reward_type=stripe_coupon_applied`.
+- Fix en el webhook (commit a0d8521): `src/routes/api/public/stripe-webhook.ts` — reintento en `setPass` (3 intentos, backoff 750 ms) ante el error transitorio "JWT issued at future" de la pasarela de Supabase (desfase de reloj con claves `sb_publishable_`), detectado por un 500 en el primer `customer.subscription.created`. Incluye también un fix de tipado en `src/routes/[.]lovable.oauth.consent.tsx` (redirect a `/auth` con `ref: null`).
+- **PUNTO 3 — Feed persistido: completado (commits 006d3e1 y 2cf80e6).**
+  - Migración `drizzle/migrations/manual/0005_feed_persistence.sql` ejecutada en Lovable Cloud: RPCs `SECURITY DEFINER` `get_feed(p_limit)`, `create_post(p_action, p_detail, p_category)`, `set_post_vote(p_post_id, p_vote)`, solo para `authenticated`.
+  - `create_post` deriva los puntos de la categoría (±120, Desliz negativo) × multiplicador del perfil, suma Aura de forma atómica y aplica el límite de 3 pruebas diarias (hora Madrid) a cuentas sin pass.
+  - `set_post_vote`: votar/cambiar/quitar voto, impide votar posts propios, devuelve contadores.
+  - `src/lib/aura-store.tsx`: feed real vía `get_feed` para usuarios con sesión, posts mock solo para visitantes; `addPost` ahora async sin parámetro `points`; votos optimistas con reconciliación; estado inicial neutro para evitar parpadeo de datos demo.
+  - `src/routes/index.tsx`: adaptado a la nueva firma de `addPost`, sin estado `points`.
+  - Verificado: feed vacío inicial, publicación +120, persistencia tras F5, votos entre cuentas, bloqueo de voto propio, límite diario.
+- **HALLAZGO CRÍTICO DE SESIONES ANTERIORES: RESUELTO.** El feed de posts ya usa las tablas reales `aura_posts`/`post_votes` (ver PUNTO 3 arriba) — deja de ser bloqueante para usuarios reales.
+- Hallazgos nuevos, no bloqueantes (sin acción esta sesión): token de acceso visible en el hash de la URL (`#access_token=...`) tras login con Google; `handle='aura'` repetido en todos los perfiles (sin unicidad); `profiles.updated_at` no se actualiza en UPDATE (falta trigger); estadísticas mock en Perfil ("+1.2k esta semana", "184 pruebas"); la racha no sube al completar hábitos (`toggle_habit` no toca `streak`); email de confirmación en inglés con remitente de Lovable (`lovable-app.email`); nombre de facturación en Stripe = `display_name` por defecto "Aura Farmer"; cliente duplicado en Stripe del 18.09 (intento de checkout fallido con `resource_missing` price); cierre de sesión inesperado de la cuenta `+ref1` durante las pruebas (causa sin determinar); el referido solo se completa al marcar hábitos, no al publicar pruebas; Stripe Tax desactivado (`automatic_tax.enabled=false`), pendiente de la respuesta fiscal.
+- Cuenta de prueba usada esta sesión: `jesuslopezmorales+ref1@gmail.com` (display_name "Jesús", 3 posts de prueba del día en `aura_posts`: "Prueba feed persistido", "Límite 2", "Límite 3").
+- indieprof.com: sigue sin respuesta a la consulta sobre suscripciones recurrentes y régimen OSS de IVA.
+
 ---
 
 ## 🔴 PENDIENTES — Alta prioridad
-- **Feed de posts no persistido** (`aura-store.tsx`): `initialPosts` sigue siendo mock, `addPost` solo modifica estado en memoria; las tablas reales `aura_posts`/`post_votes` existen pero no se usan. Bloqueante antes de abrir la app a usuarios reales.
-- PUNTO 7 — prueba de pago real de Aura Pass con jesuslopezmorales@gmail.com: sin empezar. Bloquea la verificación end-to-end del portal de clientes (PRIORIDAD 2) y del sistema de referidos (PUNTO 6).
+- **PUNTO 4 — Flujo de reporte de contenido**: no existe nada (ni tablas ni funciones). Ya no está bloqueado por el feed (PUNTO 3, resuelto 24.09.26). Diseño ya decidido: tabla `post_reports` con RLS, RPC `report_post` con umbral de ocultación, ajuste de `get_feed`, botón "Reportar" en tarjeta de post (requiere autorización explícita por congelación estética).
 - Verificar en producción tras el deploy: favicon en pestaña del navegador, "Añadir a pantalla de inicio" en móvil (iconos correctos), header mostrando el logo real, og:image en Facebook Sharing Debugger / Twitter Card Validator (ojo con cache de scrapers sociales).
 - `public/icon-512-maskable.png`: referenciado en `manifest.webmanifest` (purpose: maskable) pero no existe en el repo — bloqueante antes de dar el logo por terminado y antes de que usuarios instalen la PWA en Android.
 
 ---
 
 ## 🟡 PENDIENTES — Media prioridad
-- PUNTO 4 — flujo de reporte de contenido: bloqueado por el feed no persistido (ver Alta prioridad). Diseño ya decidido: tabla `reports` (`reporter_id`, `entity_type='post'`, `entity_id`, `reason`, `details`, `status`), sin SELECT para usuarios normales, revisión manual vía SQL editor.
-- PUNTO 5 — fiscalidad de las suscripciones: consulta enviada a indieprof.com (info@indieprof.com) sobre gestión de suscripciones recurrentes vía Stripe y régimen OSS de IVA — pendiente de respuesta.
-- Sistema de referidos (PUNTO 6): verificación end-to-end pendiente (requiere un referidor con suscripción de pago real, coincide con PUNTO 7). Limitaciones conocidas sin blindar: cambios de suscripción entre generación y procesamiento del cupón Stripe pendiente; expiración automática de `pass_expires_at` no implementada.
+- **PUNTO 5 — Expiración automática de `pass_expires_at`**: el pass gratis de 30 días concedido por referido no se revierte solo cuando caduca; falta lógica de comprobación/expiración.
+- Fiscalidad de las suscripciones: consulta enviada a indieprof.com (info@indieprof.com) sobre gestión de suscripciones recurrentes vía Stripe y régimen OSS de IVA — pendiente de respuesta. Bloquea activar Stripe Tax (`automatic_tax.enabled`).
 - Lost update en `aura-store.tsx`: `toggleHabit` escribe `profiles.aura` como valor absoluto calculado en cliente — pendiente mover a RPC atómica en Postgres para eliminar la condición de carrera con actualizaciones concurrentes del Aura desde otras fuentes.
+- Hallazgos menores del 24.09.26 sin priorizar aún: token de acceso visible en el hash de la URL tras login con Google; `handle='aura'` repetido sin unicidad; `profiles.updated_at` sin trigger; estadísticas mock en Perfil; la racha no sube al completar hábitos; email de confirmación en inglés con remitente de Lovable; nombre de facturación por defecto "Aura Farmer"; cliente duplicado en Stripe del 18.09; el referido solo se completa marcando hábitos, no publicando pruebas.
 - Revisar/ampliar el límite de gasto de GitHub Codespaces si se quiere seguir usando antes del 01.10.26.
 
 ---
@@ -215,17 +231,20 @@ Ninguno se toca sin autorización explícita.
 ### Sesión 23.09.26
 - Supabase Auth (GoTrue) valida los Redirect URLs contra `127.0.0.1`, no contra `localhost`, aunque ambos apunten al mismo servidor de desarrollo — con `localhost:8080` el login falla sin matchear ningún Redirect URL permitido aunque `http://localhost:8080/**` no esté ni siquiera en la lista, y sin un error explícito que lo delate como problema de Redirect URL. Para testear login local siempre usar `http://127.0.0.1:8080` y tener esa URL (no `localhost`) dada de alta en Lovable Cloud → Users → Authentication settings.
 
+### Sesión 24.09.26
+- Un pago Live real puede disparar en el webhook un error transitorio "JWT issued at future" (desfase de reloj de la pasarela de Supabase con claves `sb_publishable_`) que provoca un 500 en el primer `customer.subscription.created` aunque el pago en Stripe sea correcto — no es un fallo de lógica de negocio. Mitigado con reintento (3 intentos, backoff 750 ms) en la llamada que aplica el pase (`setPass`), no con manejo de errores genérico.
+- Verificar `pass_active`/`multiplier` en BD inmediatamente tras el redirect `?checkout=success` puede dar una condición de carrera si el webhook aún no procesó el evento — conviene comprobar explícitamente que la UI no depende de una lectura optimista inmediata tras el redirect, sino del estado ya persistido por el webhook.
+- Cancelar una suscripción Live desde el Dashboard de Stripe con reembolso es una forma segura y rápida de cerrar una prueba de pago real de extremo a extremo sin dejar cargos pendientes ni datos de prueba contaminando cuentas reales de Stripe.
+
 ---
 
 ## 📋 PRÓXIMA TAREA PRIORITARIA
-1. **Feed de posts no persistido** (hallazgo crítico, bloqueante antes de usuarios reales): migrar `aura-store.tsx` para leer/escribir `aura_posts`/`post_votes` reales en vez del array mock `initialPosts` y del `addPost` solo-en-memoria.
-2. Punto 7, obligatorio antes de abrir la app o cobrar: prueba de pago real de Aura Pass con jesuslopezmorales@gmail.com (perfil bd5cad45…): comprobar en el editor SQL que `pass_active=true` y `multiplier=2`, revisar que la recarga tras `?checkout=success` no llega antes que el webhook, verificar el portal de clientes (PRIORIDAD 2, 23.09.26) redirige y funciona, cancelar la suscripción en Stripe (comprueba `customer.subscription.deleted` → `pass_active=false`) y reembolsar el pago.
-3. Con una suscripción de pago activa de prueba, verificar de extremo a extremo el sistema de referidos (PUNTO 6, 23.09.26): cupón Stripe 100% al completar un referido siendo suscriptor de pago.
-4. Retomar el flujo de reporte de contenido (PUNTO 4) una vez resuelto el punto 1 de esta lista — diseño ya decidido, ver sesión 23.09.26.
-5. Fiscalidad de las suscripciones: esperar respuesta de indieprof.com (info@indieprof.com) y aplicar sus recomendaciones (régimen OSS de IVA, gestión de recurrencia Stripe).
+1. **PUNTO 4 — Flujo de reporte de contenido**: ya no bloqueado (el feed está persistido desde el 24.09.26). Diseño ya decidido, ver sesión 24.09.26 — requiere autorización explícita antes de tocar UI por la congelación estética.
+2. **PUNTO 5 — Expiración automática de `pass_expires_at`**: implementar la comprobación/expiración del pase gratis de 30 días por referido, que hoy no se revierte solo.
+3. Fiscalidad de las suscripciones: esperar respuesta de indieprof.com (info@indieprof.com) y aplicar sus recomendaciones (régimen OSS de IVA, activar `automatic_tax` en Stripe).
+4. Revisar y priorizar los hallazgos menores no bloqueantes listados en Media prioridad (racha que no sube, token en hash de URL, `handle` sin unicidad, etc.).
 
 ---
 
 ## 🔖 ÚLTIMO COMMIT
-docs: cierre de sesion 21.09.26 - verificacion branding, webhook via RPC, paginas legales, OAuth en produccion, portal Stripe y guarda anti-doble-suscripcion — fc33c78
-(Trabajo de la sesión 23.09.26 — portal de clientes, migración `apply_stripe_pass`, sistema de referidos — pendiente de commitear; ver `git status`.)
+docs: cierre de sesion 24.09.26 (pendiente de hash tras el push — ver `git log`)
