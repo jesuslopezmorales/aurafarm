@@ -280,13 +280,28 @@ function handleFromProfile(profile: ProfileRow): string {
  * is absent from the auto-generated src/integrations/supabase/types.ts (off-limits, never
  * hand-edited here). This narrow, local type lets us call it without weakening the
  * typing of the shared `supabase` client anywhere else.
+ * Since drizzle/migrations/manual/0008_streak.sql it also returns the recalculated streak.
  */
 type ToggleHabitClient = {
   rpc: (
     fn: "toggle_habit",
     args: { p_habit_id: string; p_done: boolean; p_logged_on: string },
   ) => PromiseLike<{
-    data: { new_aura: number }[] | null;
+    data: { new_aura: number; new_streak: number }[] | null;
+    error: { message: string } | null;
+  }>;
+};
+
+/**
+ * refresh_my_streak(p_today date) recalculates and returns the current user's streak
+ * (drizzle/migrations/manual/0008_streak.sql); absent from the generated types.ts.
+ */
+type RefreshStreakClient = {
+  rpc: (
+    fn: "refresh_my_streak",
+    args: { p_today: string },
+  ) => PromiseLike<{
+    data: number | null;
     error: { message: string } | null;
   }>;
 };
@@ -502,6 +517,19 @@ export function AuraProvider({ children }: { children: ReactNode }) {
         });
     }
 
+    function refreshStreak() {
+      (supabase as unknown as RefreshStreakClient)
+        .rpc("refresh_my_streak", { p_today: todayIso() })
+        .then(({ data, error }) => {
+          if (!active) return;
+          if (error) {
+            console.error("[aura-store] refresh_my_streak", error.message);
+            return;
+          }
+          if (typeof data === "number") setStreak(data);
+        });
+    }
+
     async function loadForUser(uid: string) {
       void loadFeed(uid);
 
@@ -512,6 +540,7 @@ export function AuraProvider({ children }: { children: ReactNode }) {
       } else if (existing.data) {
         applyProfile(existing.data);
         applyPendingReferralCode(existing.data);
+        refreshStreak();
       } else {
         const created = await supabase.from("profiles").insert({ id: uid }).select("*").single();
         if (!active) return;
@@ -709,7 +738,10 @@ export function AuraProvider({ children }: { children: ReactNode }) {
               return;
             }
             const row = data?.[0];
-            if (row) setAura(row.new_aura);
+            if (row) {
+              setAura(row.new_aura);
+              if (typeof row.new_streak === "number") setStreak(row.new_streak);
+            }
 
             if (done) {
               processReferralRewards({}).catch((err) => {
