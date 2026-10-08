@@ -1,5 +1,14 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Camera, Check, Flame, ShieldCheck, ThumbsDown, TrendingDown, Zap } from "lucide-react";
+import {
+  Camera,
+  Check,
+  Flag,
+  Flame,
+  ShieldCheck,
+  ThumbsDown,
+  TrendingDown,
+  Zap,
+} from "lucide-react";
 import { useState } from "react";
 
 import { AppShell } from "@/components/AppShell";
@@ -17,7 +26,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { useAura } from "@/lib/aura-store";
+import { type ReportReason, useAura } from "@/lib/aura-store";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/")({
@@ -41,14 +50,24 @@ export const Route = createFileRoute("/")({
 
 const filters = ["Todo", "Disciplina", "Coraje", "Karma", "Desliz"];
 
+const reportReasons: { value: ReportReason; label: string }[] = [
+  { value: "spam", label: "Spam" },
+  { value: "ofensivo", label: "Ofensivo" },
+  { value: "falso", label: "Falso" },
+  { value: "otro", label: "Otro" },
+];
+
 function FeedPage() {
-  const { posts, vote, addPost } = useAura();
+  const { posts, vote, addPost, reportPost } = useAura();
   const [filter, setFilter] = useState("Todo");
   const [open, setOpen] = useState(false);
   const [action, setAction] = useState("");
   const [detail, setDetail] = useState("");
   const [category, setCategory] = useState("Disciplina");
   const [publishing, setPublishing] = useState(false);
+  const [reportTarget, setReportTarget] = useState<string | null>(null);
+  const [reportReason, setReportReason] = useState<ReportReason>("spam");
+  const [reporting, setReporting] = useState(false);
 
   const visible = filter === "Todo" ? posts : posts.filter((p) => p.category === filter);
 
@@ -61,6 +80,19 @@ function FeedPage() {
     setAction("");
     setDetail("");
     setOpen(false);
+  }
+
+  function openReport(postId: string) {
+    setReportReason("spam");
+    setReportTarget(postId);
+  }
+
+  async function handleReport() {
+    if (!reportTarget || reporting) return;
+    setReporting(true);
+    await reportPost(reportTarget, reportReason);
+    setReporting(false);
+    setReportTarget(null);
   }
 
   return (
@@ -145,6 +177,50 @@ function FeedPage() {
         </DialogContent>
       </Dialog>
 
+      <Dialog
+        open={reportTarget !== null}
+        onOpenChange={(next) => {
+          if (!next && !reporting) setReportTarget(null);
+        }}
+      >
+        <DialogContent className="max-w-[92vw] rounded-3xl">
+          <DialogHeader>
+            <DialogTitle className="font-display">Reportar prueba</DialogTitle>
+            <DialogDescription>
+              Dejarás de verla. Con varios reportes se oculta para todos y se revisa.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex gap-2">
+            {reportReasons.map((r) => (
+              <button
+                key={r.value}
+                type="button"
+                onClick={() => setReportReason(r.value)}
+                className={cn(
+                  "flex-1 rounded-xl border px-2 py-2 text-[11px] font-semibold",
+                  reportReason === r.value
+                    ? "border-primary/60 bg-primary/20 text-primary"
+                    : "border-border text-muted-foreground",
+                )}
+              >
+                {r.label}
+              </button>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button
+              className="h-11 w-full rounded-2xl bg-gradient-to-r from-primary to-accent font-bold"
+              disabled={reporting}
+              onClick={() => {
+                void handleReport();
+              }}
+            >
+              Enviar reporte
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <ul className="space-y-4">
         {visible.map((p) => {
           const total = p.votesReal + p.votesCap;
@@ -196,7 +272,19 @@ function FeedPage() {
                   <span className="flex items-center gap-1">
                     <ShieldCheck className="size-3.5 text-accent" /> Autenticidad {trust}%
                   </span>
-                  <span>{total} votos</span>
+                  <span className="flex items-center gap-2">
+                    {total} votos
+                    {!p.isMine && (
+                      <button
+                        type="button"
+                        onClick={() => openReport(p.id)}
+                        aria-label="Reportar prueba"
+                        className="flex items-center gap-1 transition-colors hover:text-destructive"
+                      >
+                        <Flag className="size-3.5" /> Reportar
+                      </button>
+                    )}
+                  </span>
                 </div>
                 <div className="h-1.5 overflow-hidden rounded-full bg-secondary">
                   <div

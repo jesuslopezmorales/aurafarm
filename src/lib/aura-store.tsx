@@ -15,6 +15,8 @@ import type { Tables } from "@/integrations/supabase/types";
 
 export type Vote = "real" | "cap" | null;
 
+export type ReportReason = "spam" | "ofensivo" | "falso" | "otro";
+
 export type AuraPost = {
   id: string;
   user: string;
@@ -243,6 +245,13 @@ function createPostErrorMessage(message: string): string {
   return "No se pudo publicar la prueba";
 }
 
+function reportPostErrorMessage(message: string): string {
+  if (message.includes("own_post")) return "No puedes reportar tu propia prueba";
+  if (message.includes("post_not_found")) return "Esta prueba ya no existe";
+  if (message.includes("invalid_reason")) return "Motivo de reporte no válido";
+  return "No se pudo enviar el reporte";
+}
+
 const GUEST_DISPLAY_NAME = "Tú";
 const GUEST_HANDLE = "@tuaura";
 const REFERRAL_CODE_STORAGE_KEY = "af_referral_code";
@@ -298,8 +307,9 @@ type ApplyReferralCodeClient = {
 };
 
 /**
- * get_feed / create_post / set_post_vote are Postgres RPCs created via Lovable's SQL editor
- * (drizzle/migrations/manual/0005_feed_persistence.sql); absent from the generated types.ts.
+ * get_feed / create_post / set_post_vote / report_post are Postgres RPCs created via
+ * Lovable's SQL editor (drizzle/migrations/manual/0005_feed_persistence.sql and
+ * 0006_post_reports.sql); absent from the generated types.ts.
  */
 type FeedRow = {
   id: string;
@@ -329,6 +339,11 @@ type VoteRow = {
   my_vote: string | null;
 };
 
+type ReportRow = {
+  report_count: number;
+  hidden: boolean;
+};
+
 type RpcResult<T> = PromiseLike<{
   data: T[] | null;
   error: { message: string } | null;
@@ -344,6 +359,10 @@ type FeedRpcClient = {
     fn: "set_post_vote",
     args: { p_post_id: string; p_vote: Exclude<Vote, null> | null },
   ): RpcResult<VoteRow>;
+  rpc(
+    fn: "report_post",
+    args: { p_post_id: string; p_reason: ReportReason },
+  ): RpcResult<ReportRow>;
 };
 
 const feedRpc = (): FeedRpcClient => supabase as unknown as FeedRpcClient;
@@ -390,6 +409,7 @@ type Store = {
   checkedInZoneIds: Set<string>;
   passActive: boolean;
   vote: (postId: string, vote: Exclude<Vote, null>) => void;
+  reportPost: (postId: string, reason: ReportReason) => Promise<boolean>;
   toggleHabit: (habitId: string) => void;
   addPost: (input: AddPostInput) => Promise<boolean>;
   activatePass: (multiplier: number) => void;
@@ -627,6 +647,40 @@ export function AuraProvider({ children }: { children: ReactNode }) {
               ),
             );
           });
+      },
+      reportPost: async (postId, reason) => {
+        if (!userId) {
+          toast.error("Inicia sesión para reportar una prueba");
+          return false;
+        }
+
+        const target = posts.find((p) => p.id === postId);
+        if (!target) return false;
+
+        if (target.isMine) {
+          toast.info("No puedes reportar tu propia prueba");
+          return false;
+        }
+
+        const { error } = await feedRpc().rpc("report_post", {
+          p_post_id: postId,
+          p_reason: reason,
+        });
+
+        if (error) {
+          if (error.message.includes("already_reported")) {
+            setPosts((prev) => prev.filter((p) => p.id !== postId));
+            toast.info("Ya habías reportado esta prueba");
+            return false;
+          }
+          console.error("[aura-store] report_post", error.message);
+          toast.error(reportPostErrorMessage(error.message));
+          return false;
+        }
+
+        setPosts((prev) => prev.filter((p) => p.id !== postId));
+        toast.success("Prueba reportada. Gracias por ayudar a moderar.");
+        return true;
       },
       toggleHabit: (habitId) => {
         const target = habits.find((h) => h.id === habitId);
