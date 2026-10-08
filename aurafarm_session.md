@@ -1,11 +1,11 @@
 # AuraFarm — Session State
-_Última actualización: 24.09.26_
+_Última actualización: 08.10.26_
 
 ---
 
 ## Stack
 TanStack Start (React 19) · TypeScript · Tailwind CSS v4 · Supabase JS (vía Lovable Cloud, backend gestionado — sin dashboard directo en supabase.com) · Vite 8 · Shadcn UI (Radix) · lucide-react · Stripe (checkout + webhooks de suscripción).
-Repo: jesuslopezmorales/aurafarm. Codespace: /workspaces/aurasync (nombre de carpeta heredado, el repo y el proyecto ya se llaman aurafarm) — **cuota mensual de Codespaces agotada al 100% el 15.09.26, resetea el 01.10.26; hasta entonces, desarrollo local o github.dev (sin terminal)**.
+Repo: jesuslopezmorales/aurafarm. Codespace: /workspaces/aurasync (nombre de carpeta heredado, el repo y el proyecto ya se llaman aurafarm) — **acceso a Codespaces recuperado el 08.10.26 (codespace "opulent lamp")**; el login no funciona desde la URL *.app.github.dev del Codespace (no está en Redirect URLs de Lovable Cloud), las pruebas de login se hacen en producción. Clon local de Windows en D:\_JLM_\Proyectos\aurafarm (requiere `git pull` + `npm install` al volver a usarlo).
 Hosting de producción del frontend real: **Vercel** (proyecto "aurafarm", plan gratuito), no Lovable Hosting (requiere plan Pro 25€/mes). Dominio: getaurafarmapp.com / www.getaurafarmapp.com (Squarespace, DNS apuntando a Vercel desde 15.09.26; email corporativo vía Zoho Mail sigue en el mismo dominio, registros MX/TXT intactos).
 
 **PASO 0 OBLIGATORIO — antes de cualquier acción:**
@@ -150,18 +150,19 @@ Adjuntar XML a Claude Chat antes de tocar código.
 ---
 
 ## 🔴 PENDIENTES — Alta prioridad
-- **PUNTO 4 — Flujo de reporte de contenido**: no existe nada (ni tablas ni funciones). Ya no está bloqueado por el feed (PUNTO 3, resuelto 24.09.26). Diseño ya decidido: tabla `post_reports` con RLS, RPC `report_post` con umbral de ocultación, ajuste de `get_feed`, botón "Reportar" en tarjeta de post (requiere autorización explícita por congelación estética).
+- **Fiscalidad de las suscripciones (BLOQUEANTE antes de facturar de verdad)**: indieprof.com respondió el 08.10.26 que no gestionan suscripciones recurrentes. Sigue sin resolver el alta fiscal y el régimen OSS de IVA; hay que buscar otro gestor/asesor. Bloquea activar Stripe Tax (`automatic_tax.enabled`).
 - Verificar en producción tras el deploy: favicon en pestaña del navegador, "Añadir a pantalla de inicio" en móvil (iconos correctos), header mostrando el logo real, og:image en Facebook Sharing Debugger / Twitter Card Validator (ojo con cache de scrapers sociales).
 - `public/icon-512-maskable.png`: referenciado en `manifest.webmanifest` (purpose: maskable) pero no existe en el repo — bloqueante antes de dar el logo por terminado y antes de que usuarios instalen la PWA en Android.
 
 ---
 
 ## 🟡 PENDIENTES — Media prioridad
-- **PUNTO 5 — Expiración automática de `pass_expires_at`**: el pass gratis de 30 días concedido por referido no se revierte solo cuando caduca; falta lógica de comprobación/expiración.
-- Fiscalidad de las suscripciones: consulta enviada a indieprof.com (info@indieprof.com) sobre gestión de suscripciones recurrentes vía Stripe y régimen OSS de IVA — pendiente de respuesta. Bloquea activar Stripe Tax (`automatic_tax.enabled`).
 - Lost update en `aura-store.tsx`: `toggleHabit` escribe `profiles.aura` como valor absoluto calculado en cliente — pendiente mover a RPC atómica en Postgres para eliminar la condición de carrera con actualizaciones concurrentes del Aura desde otras fuentes.
-- Hallazgos menores del 24.09.26 sin priorizar aún: token de acceso visible en el hash de la URL tras login con Google; `handle='aura'` repetido sin unicidad; `profiles.updated_at` sin trigger; estadísticas mock en Perfil; la racha no sube al completar hábitos; email de confirmación en inglés con remitente de Lovable; nombre de facturación por defecto "Aura Farmer"; cliente duplicado en Stripe del 18.09; el referido solo se completa marcando hábitos, no publicando pruebas.
-- Revisar/ampliar el límite de gasto de GitHub Codespaces si se quiere seguir usando antes del 01.10.26.
+- Herramientas MCP desalineadas con la lógica de servidor (08.10.26): `list-aura-feed` lee `aura_posts` directamente y muestra posts ocultos; `log_aura_action` inserta en `aura_posts` saltándose `create_post` (sin límite diario) y suma `streak` +1; `log_habit` inserta en `habit_logs` sin pasar por `toggle_habit` (no recalcula racha ni dispara referidos).
+- `set_post_vote` permite votar posts ocultos (08.10.26).
+- El botón "Gestionar suscripción" en `aura-pass.tsx` se muestra con `multiplier > 1`, también a usuarios con pass gratis de referido sin cliente Stripe (fallaría con `NO_STRIPE_CUSTOMER`) (08.10.26).
+- 12 vulnerabilidades de `npm audit` por revisar (no bloquean el build de Vercel). No ejecutar `npm audit fix --force` (08.10.26).
+- Hallazgos menores del 24.09.26 que siguen abiertos: `profiles.updated_at` no se actualiza en UPDATE (falta trigger); email de confirmación en inglés con remitente de Lovable; nombre de facturación por defecto "Aura Farmer" en Stripe; cliente duplicado en Stripe del 18.09; cierre de sesión inexplicado de la cuenta de prueba durante tests anteriores; la recompensa de referidos solo se dispara al completar hábitos, no al publicar pruebas.
 
 ---
 
@@ -239,12 +240,50 @@ Ninguno se toca sin autorización explícita.
 ---
 
 ## 📋 PRÓXIMA TAREA PRIORITARIA
-1. **PUNTO 4 — Flujo de reporte de contenido**: ya no bloqueado (el feed está persistido desde el 24.09.26). Diseño ya decidido, ver sesión 24.09.26 — requiere autorización explícita antes de tocar UI por la congelación estética.
-2. **PUNTO 5 — Expiración automática de `pass_expires_at`**: implementar la comprobación/expiración del pase gratis de 30 días por referido, que hoy no se revierte solo.
-3. Fiscalidad de las suscripciones: esperar respuesta de indieprof.com (info@indieprof.com) y aplicar sus recomendaciones (régimen OSS de IVA, activar `automatic_tax` en Stripe).
-4. Revisar y priorizar los hallazgos menores no bloqueantes listados en Media prioridad (racha que no sube, token en hash de URL, `handle` sin unicidad, etc.).
+1. Fiscalidad de las suscripciones: indieprof.com no gestiona suscripciones recurrentes — buscar otro gestor/asesor para el alta y el régimen OSS de IVA, y activar `automatic_tax` en Stripe. Bloqueante antes de facturar de verdad.
+2. Alinear las herramientas MCP con las RPCs de servidor (`get_feed`, `create_post`, `toggle_habit`) y bloquear votos a posts ocultos en `set_post_vote`.
+3. Mostrar "Gestionar suscripción" solo a usuarios con cliente Stripe (no a pass gratis de referido).
+4. Revisar las 12 vulnerabilidades de `npm audit` y el resto de pendientes no bloqueantes de Media prioridad.
 
 ---
 
 ## 🔖 ÚLTIMO COMMIT
-docs: cierre de sesion 24.09.26 (pendiente de hash tras el push — ver `git log`)
+a351b99 feat: handles unicos en profiles (trigger ensure_unique_handle, reasignacion de duplicados, indice unico) — el cierre documental de la sesión 08.10.26 queda pendiente de commit (ver `git log`)
+
+---
+
+## SESIÓN 08.10.26
+
+### Entorno
+- Recuperado el acceso a GitHub Codespaces (codespace "opulent lamp", carpeta `/workspaces/aurasync` por el nombre antiguo del repo). Sincronizado con `origin/main` por fast-forward (25 commits). El `.env` del Codespace es idéntico al local (comprobado por hash).
+- El login no funciona desde la URL `*.app.github.dev` del Codespace (no está en Redirect URLs de Lovable Cloud); las pruebas se hacen en producción.
+- El clon local de Windows (`D:\_JLM_\Proyectos\aurafarm`) necesita `git pull` + `npm install` al volver a usarlo (cambiaron dependencias).
+- indieprof.com respondió que no gestionan suscripciones recurrentes: la fiscalidad de las suscripciones (alta, OSS de IVA) sigue sin resolver y es bloqueante antes de facturar de verdad.
+
+### Completado y verificado en producción
+- **PUNTO 4 — Reportes de contenido** (commit 36f04cf, migración `0006_post_reports.sql`): columna `aura_posts.hidden_at`; tabla `post_reports` (un reporte por usuario y post, motivos spam/ofensivo/falso/otro) con RLS solo SELECT propio; RPC `report_post` (`SECURITY DEFINER`) con umbral de 3 reportes que oculta el post y resta al autor los puntos positivos que ganó; `get_feed` excluye posts ocultos y los ya reportados por el usuario. Cliente: `reportPost` en `aura-store.tsx` y botón "Reportar" (icono Flag) junto al recuento de votos en `index.tsx`, solo en posts ajenos, con diálogo de motivos (cambio visual autorizado). Verificado con cuenta A (jesuslopezmorales@gmail.com, perfil bd5cad45) y cuenta B nueva (jesuslopezmorales+report1@gmail.com, perfil c300cb51); umbral verificado simulando 2 reportes desde SQL (suplantando perfiles con `set_config` de `request.jwt.claims`).
+- **Fix build Vercel** (commit 8f5fe0a): Vercel bloqueaba el despliegue por CVE-2026-102989 en `@tanstack/react-start` 1.168.32. Actualizado a `react-start` 1.168.60, `react-router` 1.170.41 (versión exacta que exige), `router-plugin` 1.168.42, todas fijadas sin `^`. `npm audit` reporta 12 vulnerabilidades más (no bloquean el build); no ejecutar `npm audit fix --force`.
+- **PUNTO 5 — Expiración del pass gratis de referidos** (commit 5ca2dbc, migración `0007_pass_expiration.sql`): extensión `pg_cron` activada; función `expire_free_passes()` (sin permisos para clientes); job pg_cron `expire-free-passes` cada hora en el minuto 7, verificado en `cron.job_run_details`; `apply_stripe_pass` parcheado para limpiar `pass_expires_at` (parche aplicado leyendo la definición desplegada con `pg_get_functiondef`, sin exponer `STRIPE_RPC_SECRET`).
+- **Token en hash de URL tras login Google** (commit 2584a35): confirmado que `access_token`/`refresh_token` quedaban en el historial del navegador. Solución: `flowType: "pkce"` en `src/integrations/supabase/client.ts` (archivo con cabecera auto-generada por Lovable, modificado manualmente; el repo no se sincroniza con Lovable). Verificado: 0 entradas con `access_token`, retorno de Google con `?code=`. Efecto colateral: el enlace de confirmación de email solo inicia sesión automáticamente en el mismo navegador del registro.
+- **Racha** (commit 057d436, migración `0008_streak.sql`): racha = días consecutivos con al menos un hábito (`kind` habit) registrado, viva si el último es hoy o ayer. `compute_streak` (interna), `toggle_habit` devuelve `(new_aura, new_streak)` y recalcula `profiles.streak`, `refresh_my_streak(p_today)` llamada al cargar el perfil. Rachas existentes recalculadas.
+- **Estadísticas del Perfil** (commit 01e0e21, migración `0009_profile_stats.sql`): `get_my_stats(p_today)` devuelve `week_aura` (pruebas propias no ocultas + hábitos × multiplicador actual desde el lunes, hora Madrid) y `proofs_count`. `perfil.tsx` las muestra con el mismo formato; visitantes sin sesión siguen viendo los valores demo. Limitación: sin historial del multiplicador, la parte de hábitos es aproximada si cambió durante la semana.
+- **Handle repetido** (commit a351b99, migración `0010_unique_handles.sql`): trigger `ensure_unique_handle` (normaliza, genera `aura`+8 caracteres del id si viene vacío o "aura", resuelve colisiones con sufijo); handles existentes reasignados; índice único sobre `lower(handle)`.
+
+### Datos de prueba en producción
+- Post "TEST reporte 08.10." de la cuenta A, oculto (3 reportes).
+- Hábito "TEST racha" (+50) en la cuenta A.
+- Cuenta jesuslopezmorales+report1@gmail.com (perfil c300cb51).
+
+### Pendientes no bloqueantes nuevos de hoy
+- Herramientas MCP desalineadas con la lógica de servidor: `list-aura-feed` lee `aura_posts` directamente y muestra posts ocultos; `log_aura_action` inserta en `aura_posts` saltándose `create_post` (sin límite diario) y suma `streak` +1; `log_habit` inserta en `habit_logs` sin pasar por `toggle_habit` (no recalcula racha ni dispara referidos).
+- `set_post_vote` permite votar posts ocultos.
+- El botón "Gestionar suscripción" en `aura-pass.tsx` se muestra con `multiplier > 1`, también a usuarios con pass gratis de referido sin cliente Stripe (fallaría con `NO_STRIPE_CUSTOMER`).
+- 12 vulnerabilidades de `npm audit` por revisar.
+
+### Pendientes no bloqueantes anteriores que siguen abiertos
+- `profiles.updated_at` no se actualiza en UPDATE (falta trigger).
+- Email de confirmación en inglés y con remitente de Lovable.
+- Nombre de facturación "Aura Farmer" por defecto en Stripe.
+- Cliente Stripe duplicado del 18.09.
+- Cierre de sesión inexplicado de la cuenta de prueba durante tests anteriores.
+- Recompensa de referidos solo se dispara al completar hábitos, no al publicar.
