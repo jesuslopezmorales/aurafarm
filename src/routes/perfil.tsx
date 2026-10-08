@@ -30,6 +30,44 @@ export const Route = createFileRoute("/perfil")({
   component: ProfilePage,
 });
 
+/**
+ * get_my_stats(p_today date) is a Postgres RPC created via Lovable's SQL editor
+ * (drizzle/migrations/manual/0009_profile_stats.sql); absent from the generated types.ts.
+ */
+type StatsRpcClient = {
+  rpc: (
+    fn: "get_my_stats",
+    args: { p_today: string },
+  ) => PromiseLike<{
+    data: { week_aura: number; proofs_count: number }[] | null;
+    error: { message: string } | null;
+  }>;
+};
+
+type ProfileStats = { weekAura: number; proofsCount: number };
+
+/** Valores de demostración para visitantes sin sesión. */
+const GUEST_WEEK_LABEL = "+1.2k";
+const GUEST_PROOFS_LABEL = "184";
+const LOADING_LABEL = "—";
+
+/** Fecha local (no UTC) en formato YYYY-MM-DD, igual que habit_logs.logged_on. */
+function localTodayIso(): string {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+/** Formato compacto con signo: +50, -120, +1.2k. */
+function formatWeekAura(value: number): string {
+  const sign = value > 0 ? "+" : value < 0 ? "-" : "";
+  const abs = Math.abs(value);
+  const body = abs >= 1000 ? `${(abs / 1000).toFixed(1)}k` : String(abs);
+  return `${sign}${body}`;
+}
+
 function ProfilePage() {
   const {
     aura,
@@ -54,6 +92,40 @@ function ProfilePage() {
   const [avatarDraft, setAvatarDraft] = useState(avatarUrl ?? "");
   const [editingBio, setEditingBio] = useState(false);
   const [bioDraft, setBioDraft] = useState(bio ?? "");
+  const [stats, setStats] = useState<ProfileStats | null>(null);
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setStats(null);
+      return;
+    }
+    let active = true;
+    (supabase as unknown as StatsRpcClient)
+      .rpc("get_my_stats", { p_today: localTodayIso() })
+      .then(({ data, error }) => {
+        if (!active) return;
+        if (error) {
+          console.error("[perfil] get_my_stats", error.message);
+          return;
+        }
+        const row = data?.[0];
+        if (row) setStats({ weekAura: row.week_aura, proofsCount: row.proofs_count });
+      });
+    return () => {
+      active = false;
+    };
+  }, [isAuthenticated, aura]);
+
+  const weekLabel = !isAuthenticated
+    ? GUEST_WEEK_LABEL
+    : stats
+      ? formatWeekAura(stats.weekAura)
+      : LOADING_LABEL;
+  const proofsLabel = !isAuthenticated
+    ? GUEST_PROOFS_LABEL
+    : stats
+      ? stats.proofsCount.toLocaleString("es-ES")
+      : LOADING_LABEL;
 
   function startEditingName() {
     setNameDraft(displayName || "Tú");
@@ -253,8 +325,8 @@ function ProfilePage() {
       <div className="mt-4 grid grid-cols-3 gap-3">
         {[
           { icon: Flame, label: "Racha", value: `${streak} d` },
-          { icon: TrendingUp, label: "Esta semana", value: "+1.2k" },
-          { icon: Target, label: "Pruebas", value: "184" },
+          { icon: TrendingUp, label: "Esta semana", value: weekLabel },
+          { icon: Target, label: "Pruebas", value: proofsLabel },
         ].map(({ icon: Icon, label, value }) => (
           <div key={label} className="glass rounded-2xl p-3 text-center">
             <Icon className="mx-auto size-4 text-accent" />
