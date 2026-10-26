@@ -1,11 +1,11 @@
 # AuraFarm — Session State
-_Última actualización: 08.10.26_
+_Última actualización: 26.10.26_
 
 ---
 
 ## Stack
 TanStack Start (React 19) · TypeScript · Tailwind CSS v4 · Supabase JS (vía Lovable Cloud, backend gestionado — sin dashboard directo en supabase.com) · Vite 8 · Shadcn UI (Radix) · lucide-react · Stripe (checkout + webhooks de suscripción).
-Repo: jesuslopezmorales/aurafarm. Codespace: /workspaces/aurasync (nombre de carpeta heredado, el repo y el proyecto ya se llaman aurafarm) — **acceso a Codespaces recuperado el 08.10.26 (codespace "opulent lamp")**; el login no funciona desde la URL *.app.github.dev del Codespace (no está en Redirect URLs de Lovable Cloud), las pruebas de login se hacen en producción. Clon local de Windows en D:\_JLM_\Proyectos\aurafarm (requiere `git pull` + `npm install` al volver a usarlo).
+Repo: jesuslopezmorales/aurafarm. Entorno de desarrollo PRINCIPAL y único desde el 26.10.26: VS Code local en Windows (PowerShell 7), ruta `D:\_JLM_\Proyectos\AuraFarm\aurafarm-app` (requiere `npm install` si cambió `package.json` desde el último uso). Los Codespaces (de AuraFarm y de VibeRadar) se borraron el 26.10.26 — ya no es un entorno de trabajo habitual, ver histórico de sesiones anteriores para su configuración pasada.
 Hosting de producción del frontend real: **Vercel** (proyecto "aurafarm", plan gratuito), no Lovable Hosting (requiere plan Pro 25€/mes). Dominio: getaurafarmapp.com / www.getaurafarmapp.com (Squarespace, DNS apuntando a Vercel desde 15.09.26; email corporativo vía Zoho Mail sigue en el mismo dominio, registros MX/TXT intactos).
 
 **PASO 0 OBLIGATORIO — antes de cualquier acción:**
@@ -171,6 +171,7 @@ Adjuntar XML a Claude Chat antes de tocar código.
 - Evaluar LOVABLE_DB_MIGRATION_URL (Enterprise).
 - Activar Stripe KYC completo (verificación de identidad para recibir pagos reales).
 - Empaquetado Android (Capacitor vs TWA), cuenta Google Play Developer, política de privacidad/términos.
+- Ideas de roadmap (baja prioridad, trasladadas de `roadmap.md` antes de borrarlo el 26.10.26 — los otros dos ítems del roadmap, login y ruta de consentimiento OAuth y la página `/conectar`, ya estaban hechos y verificados, ver sesiones 11.09.26 y 17.09.26): ZIP descargable con el código fuente (sin dependencias ni secretos).
 
 ---
 
@@ -287,3 +288,16 @@ a351b99 feat: handles unicos en profiles (trigger ensure_unique_handle, reasigna
 - Cliente Stripe duplicado del 18.09.
 - Cierre de sesión inexplicado de la cuenta de prueba durante tests anteriores.
 - Recompensa de referidos solo se dispara al completar hábitos, no al publicar.
+
+---
+
+## SESIÓN 26.10.26 (organización)
+
+- Reorganización de carpetas: el proyecto pasó a vivir en `D:\_JLM_\Proyectos\AuraFarm\aurafarm-app` (antes `D:\_JLM_\Proyectos\aurafarm`, ver entradas de sesiones anteriores para la ruta antigua).
+- `git pull` de 8 commits pendientes que estaban solo en el Codespace.
+- Codespace de AuraFarm borrado (junto con el de VibeRadar); VS Code local en Windows pasa a ser el único entorno de trabajo.
+- Limpieza de restos del proyecto (inventario previo, solo lectura, confirmado por Jesús antes de actuar):
+  - Borrados del disco (ya ignorados por git, con copia protegida fuera del repo): carpeta `Backups-Secrets/` interna al proyecto, `repomix-focused-18.09.26_1.xml`, `repomix-focused-21.09.26_1.xml`.
+  - `tsconfig.tsbuildinfo` (artefacto de caché de `tsc` commiteado por descuido): `git rm --cached` + añadido `*.tsbuildinfo` a `.gitignore`.
+  - `roadmap.md` borrado (`git rm`) tras trasladar su único ítem pendiente real (ZIP descargable del código fuente) a Pendientes — Baja prioridad, arriba.
+- **Recordatorio: ejecutar `npm install` antes de seguir trabajando** — `package.json`/`package-lock.json` cambiaron desde el último uso de este entorno.
